@@ -1,29 +1,48 @@
 import { Board } from "./board";
+import { GameState } from "./gamestate";
 
 export class GameManager {
-    private board: Board;
-    private isTurn: boolean; // true your turn, false opponent's turn
+    private gameState: GameState;
 
-    private playerColor: string; // "white" or "black"
+    private playerID: string; // ID of the player whose turn it is
+    private playerColor: string | null; // "white" or "black" null for spectators
 
     constructor() {
-        this.board = new Board();
-        this.isTurn = true;
-        this.playerColor = "white";
+        this.playerID = ""; // This will be set when a player connects
+        this.playerColor = null; // Initially, the player has no color assigned
+        this.gameState = new GameState("{}");
     }
 
-    private friendlyCapturedPieces: number[] = [];
-    private opponentCapturedPieces: number[] = [];
+    public setPlayerID(playerID: string): void {
+        this.playerID = playerID;
+    }
+    public loadGameState(jsonData: any): void {
+        this.gameState = new GameState(jsonData, this.playerID);
+        if (this.gameState.whitePlayer === this.playerID) {
+            this.playerColor = "white";
+        } else if (this.gameState.blackPlayer === this.playerID) {
+            this.playerColor = "black";
+        }
+        else {
+            this.playerColor = null; // Spectator or not assigned
+        }
+    }
 
     public getBoard(): Board {
-        return this.board;
+        return this.gameState.board;
     }
 
     public getIsTurn(): boolean {
-        return this.isTurn;
+        if (this.playerColor === null) {
+            return false; // Spectators cannot make moves
+        }
+        if (this.playerColor === this.gameState.currentTurn) {
+            return true; // It's the player's turn
+        }
+        return false;
     }
 
-    public getPlayerColor(): string {
+    public getPlayerColor(): string | null {
         return this.playerColor;
     }
 }

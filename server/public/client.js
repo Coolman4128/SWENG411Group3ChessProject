@@ -3367,31 +3367,360 @@
     connect: lookup2
   });
 
-  // src/main.ts
-  var greeting = (name) => {
-    return `Hello, ${name}!`;
+  // src/Game/canvasmanager.ts
+  var CanvasManager = class {
+    constructor(canvasId) {
+      this.squareSize = 80;
+      this.pieceImages = /* @__PURE__ */ new Map();
+      this.imagesLoaded = false;
+      this.canvas = document.getElementById(canvasId);
+      if (!this.canvas) {
+        throw new Error(`Canvas with id '${canvasId}' not found.`);
+      }
+      this.ctx = this.canvas.getContext("2d");
+      if (!this.ctx) {
+        throw new Error("Could not get 2D context from canvas.");
+      }
+      this.loadImages();
+    }
+    async loadImages() {
+      this.boardImage = new Image();
+      this.boardImage.src = "./rect-8x8.png";
+      const pieceTypes = ["pawn", "rook", "knight", "bishop", "queen", "king"];
+      const colors = ["white", "black"];
+      const imagePromises = [];
+      imagePromises.push(new Promise((resolve) => {
+        this.boardImage.onload = () => resolve();
+      }));
+      for (const color of colors) {
+        for (const piece of pieceTypes) {
+          const imageName = `${color}-${piece}.png`;
+          const image = new Image();
+          image.src = `./${imageName}`;
+          this.pieceImages.set(imageName, image);
+          imagePromises.push(new Promise((resolve) => {
+            image.onload = () => resolve();
+          }));
+        }
+      }
+      await Promise.all(imagePromises);
+      this.imagesLoaded = true;
+      console.log("All images loaded successfully");
+    }
+    drawBoard(board) {
+      if (!this.imagesLoaded) {
+        console.warn("Images not loaded yet, retrying in 100ms...");
+        setTimeout(() => this.drawBoard(board), 100);
+        return;
+      }
+      this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+      this.ctx.drawImage(this.boardImage, 0, 0, this.canvas.width, this.canvas.height);
+      this.drawPieces(board);
+    }
+    drawPieces(board) {
+      const squares = board.getSquares();
+      for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+          const piece = board.getPieceAt(row, col);
+          if (piece) {
+            this.drawPiece(piece, row, col);
+          }
+        }
+      }
+    }
+    drawPiece(piece, row, col) {
+      const imageName = piece.getPiecePNG();
+      const image = this.pieceImages.get(imageName);
+      if (image) {
+        const x = col * this.squareSize;
+        const y = row * this.squareSize;
+        this.ctx.drawImage(image, x, y, this.squareSize, this.squareSize);
+      } else {
+        console.warn(`Image not found for piece: ${imageName}`);
+      }
+    }
+    getSquareFromPixel(x, y) {
+      const rect = this.canvas.getBoundingClientRect();
+      const canvasX = x - rect.left;
+      const canvasY = y - rect.top;
+      const col = Math.floor(canvasX / this.squareSize);
+      const row = Math.floor(canvasY / this.squareSize);
+      if (row >= 0 && row < 8 && col >= 0 && col < 8) {
+        return { row, col };
+      }
+      return null;
+    }
+    addClickListener(callback) {
+      this.canvas.addEventListener("click", (event) => {
+        const square = this.getSquareFromPixel(event.clientX, event.clientY);
+        if (square) {
+          callback(square.row, square.col);
+        }
+      });
+    }
+    highlightSquare(row, col, color = "rgba(255, 255, 0, 0.5)") {
+      const x = col * this.squareSize;
+      const y = row * this.squareSize;
+      this.ctx.fillStyle = color;
+      this.ctx.fillRect(x, y, this.squareSize, this.squareSize);
+    }
+    isImagesLoaded() {
+      return this.imagesLoaded;
+    }
   };
+
+  // src/Game/piece.ts
+  var _Piece = class _Piece {
+    constructor(type, color, id = -1) {
+      this.type = type;
+      if (color !== "white" && color !== "black") {
+        throw new Error("Invalid color. Must be 'white' or 'black'.");
+      }
+      this.color = color;
+      if (id >= 0) {
+        this.id = id;
+      } else {
+        this.id = _Piece.pieceCount++;
+      }
+    }
+    getValue() {
+      switch (this.type) {
+        case 1 /* PAWN */:
+          return 1;
+        case 2 /* ROOK */:
+          return 5;
+        case 3 /* KNIGHT */:
+          return 3;
+        case 4 /* BISHOP */:
+          return 3;
+        case 5 /* QUEEN */:
+          return 9;
+        case 6 /* KING */:
+          return 0;
+        // King is invaluable in terms of game rules
+        default:
+          return 0;
+      }
+    }
+    getPiecePNG() {
+      var pieceName = "";
+      switch (this.type) {
+        case 1 /* PAWN */:
+          pieceName = "pawn";
+          break;
+        case 2 /* ROOK */:
+          pieceName = "rook";
+          break;
+        case 3 /* KNIGHT */:
+          pieceName = "knight";
+          break;
+        case 4 /* BISHOP */:
+          pieceName = "bishop";
+          break;
+        case 5 /* QUEEN */:
+          pieceName = "queen";
+          break;
+        case 6 /* KING */:
+          pieceName = "king";
+          break;
+        default:
+          throw new Error("Invalid piece type.");
+      }
+      return `${this.color}-${pieceName}.png`;
+    }
+    getType() {
+      return this.type;
+    }
+    getColor() {
+      return this.color;
+    }
+  };
+  _Piece.pieceCount = 1;
+  var Piece = _Piece;
+
+  // src/Game/board.ts
+  var Board = class _Board {
+    constructor(fromJSON = false) {
+      this.squares = [];
+      this.pieces = [];
+      if (fromJSON) {
+        return;
+      }
+      this.initializeBoard();
+    }
+    initializeBoard() {
+      for (let i = 0; i < 8; i++) {
+        this.squares[i] = [];
+        for (let j = 0; j < 8; j++) {
+          this.squares[i][j] = 0;
+        }
+      }
+      for (let j = 0; j < 8; j++) {
+        var newPawn = new Piece(1 /* PAWN */, "white");
+        this.addPiece(newPawn, 6, j);
+        var newPawnBlack = new Piece(1 /* PAWN */, "black");
+        this.addPiece(newPawnBlack, 1, j);
+      }
+      this.addPiece(new Piece(2 /* ROOK */, "white"), 7, 0);
+      this.addPiece(new Piece(3 /* KNIGHT */, "white"), 7, 1);
+      this.addPiece(new Piece(4 /* BISHOP */, "white"), 7, 2);
+      this.addPiece(new Piece(5 /* QUEEN */, "white"), 7, 3);
+      this.addPiece(new Piece(6 /* KING */, "white"), 7, 4);
+      this.addPiece(new Piece(4 /* BISHOP */, "white"), 7, 5);
+      this.addPiece(new Piece(3 /* KNIGHT */, "white"), 7, 6);
+      this.addPiece(new Piece(2 /* ROOK */, "white"), 7, 7);
+      this.addPiece(new Piece(2 /* ROOK */, "black"), 0, 0);
+      this.addPiece(new Piece(3 /* KNIGHT */, "black"), 0, 1);
+      this.addPiece(new Piece(4 /* BISHOP */, "black"), 0, 2);
+      this.addPiece(new Piece(5 /* QUEEN */, "black"), 0, 3);
+      this.addPiece(new Piece(6 /* KING */, "black"), 0, 4);
+      this.addPiece(new Piece(4 /* BISHOP */, "black"), 0, 5);
+      this.addPiece(new Piece(3 /* KNIGHT */, "black"), 0, 6);
+      this.addPiece(new Piece(2 /* ROOK */, "black"), 0, 7);
+    }
+    getSquares() {
+      return this.squares;
+    }
+    addPiece(piece, x, y) {
+      if (x < 0 || x >= 8 || y < 0 || y >= 8) {
+        throw new Error("Coordinates out of bounds.");
+      }
+      this.squares[x][y] = piece.id;
+      this.pieces.push(piece);
+    }
+    getPieceAt(x, y) {
+      const pieceId = this.squares[x][y];
+      return pieceId ? this.pieces.find((piece) => piece.id === pieceId) || null : null;
+    }
+    attemptMovePiece(fromX, fromY, toX, toY) {
+      const piece = this.getPieceAt(fromX, fromY);
+      if (!piece) {
+        throw new Error("No piece at the specified coordinates.");
+      }
+      if (toX < 0 || toX >= 8 || toY < 0 || toY >= 8) {
+        throw new Error("Target coordinates out of bounds.");
+      }
+      if (this.squares[toX][toY] !== 0) {
+        throw new Error("Target square is already occupied.");
+      }
+      this.squares[toX][toY] = piece.id;
+      this.squares[fromX][fromY] = 0;
+      return true;
+    }
+    static getBoardFromJSON(jsonData) {
+      const board = new _Board(true);
+      board.squares = jsonData.squares || [];
+      board.pieces = (jsonData.pieces || []).map((pieceData) => new Piece(pieceData.type, pieceData.color, pieceData.id));
+      return board;
+    }
+  };
+
+  // src/Game/gamestate.ts
+  var GameState = class {
+    constructor(jsonData) {
+      console.log("Initializing GameState with data:", jsonData);
+      const data = jsonData;
+      console.log("Available properties:", Object.keys(data));
+      console.log("whitePlayer:", data.whitePlayer);
+      console.log("blackPlayer:", data.blackPlayer);
+      console.log("currentTurn:", data.currentTurn);
+      console.log("board exists:", data.board !== void 0);
+      this.whitePlayer = data.whitePlayer || null;
+      this.blackPlayer = data.blackPlayer || null;
+      this.currentTurn = data.currentTurn || "white";
+      if (data.board === void 0) {
+        console.log("Board is undefined, creating new board");
+        this.board = new Board();
+      } else {
+        console.log("Loading board from JSON data");
+        this.board = Board.getBoardFromJSON(data.board);
+      }
+    }
+  };
+
+  // src/Game/gamemanager.ts
+  var GameManager = class {
+    // "white" or "black" null for spectators
+    constructor() {
+      this.playerID = "";
+      this.playerColor = null;
+      this.gameState = new GameState("{}");
+    }
+    setPlayerID(playerID) {
+      this.playerID = playerID;
+    }
+    loadGameState(jsonData) {
+      this.gameState = new GameState(jsonData);
+      if (this.gameState.whitePlayer === this.playerID) {
+        this.playerColor = "white";
+      } else if (this.gameState.blackPlayer === this.playerID) {
+        this.playerColor = "black";
+      } else {
+        this.playerColor = null;
+      }
+    }
+    getBoard() {
+      return this.gameState.board;
+    }
+    getIsTurn() {
+      if (this.playerColor === null) {
+        return false;
+      }
+      if (this.playerColor === this.gameState.currentTurn) {
+        return true;
+      }
+      return false;
+    }
+    getPlayerColor() {
+      return this.playerColor;
+    }
+  };
+
+  // src/main.ts
   var socket = lookup2("http://localhost:3000");
+  var canvasManager;
+  var gameManager;
   document.addEventListener("DOMContentLoaded", () => {
-    const el = document.getElementById("greet");
-    if (el) el.textContent = greeting("TypeScript");
+    initializeChessGame();
     socket.on("connect", () => {
       console.log("Connected to server:", socket.id);
+      gameManager.setPlayerID(socket.id ?? "");
+      socket.on("gameState", (data) => {
+        console.log("Received game state:", data);
+        var dataObject = JSON.parse(data);
+        gameManager.loadGameState(dataObject);
+        drawGame();
+      });
+      socket.on("disconnect", () => {
+        console.log("Disconnected from server");
+      });
     });
-    socket.on("message", (data) => {
-      console.log("Message from server:", data);
-    });
-    socket.on("move", (moveData) => {
-      console.log("Chess move received:", moveData);
-    });
-    socket.on("disconnect", () => {
-      console.log("Disconnected from server");
-    });
-    const sendMessage = (message) => {
-      socket.emit("message", { text: message, timestamp: Date.now() });
-    };
-    const sendMove = (from, to) => {
-      socket.emit("move", { from, to, timestamp: Date.now() });
-    };
   });
+  function initializeChessGame() {
+    try {
+      gameManager = new GameManager();
+      canvasManager = new CanvasManager("chessCanvas");
+      canvasManager.addClickListener((row, col) => {
+        console.log(`Clicked on square: ${row}, ${col}`);
+        const piece = gameManager.getBoard().getPieceAt(row, col);
+        if (piece) {
+          console.log(`Piece found: ${piece.getPiecePNG()}`);
+        }
+      });
+      setTimeout(() => {
+        drawGame();
+      }, 500);
+    } catch (error) {
+      console.error("Error initializing chess game:", error);
+    }
+  }
+  function drawGame() {
+    if (canvasManager && canvasManager.isImagesLoaded()) {
+      console.log("Drawing game board");
+      console.log("Current board state:", gameManager.getBoard());
+      canvasManager.drawBoard(gameManager.getBoard());
+    } else {
+      setTimeout(drawGame, 100);
+    }
+  }
 })();

@@ -7,18 +7,13 @@ export class Piece{
     private static pieceCount: number = 1;
     public id: number;
 
-    constructor(type: PieceType, color: string, id: number = -1) {
+    constructor(type: PieceType, color: string) {
         this.type = type;
         if (color !== "white" && color !== "black") {
             throw new Error("Invalid color. Must be 'white' or 'black'.");
         }
         this.color = color;
-        if (id >= 0) {
-            this.id = id;
-        }
-        else {
         this.id = Piece.pieceCount++;
-        }
     }
 
     public getValue(): number{

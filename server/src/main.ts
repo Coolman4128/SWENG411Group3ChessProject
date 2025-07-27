@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as url from "url";
 import { Server } from "socket.io";
+import { GameManager } from "./Game/gamemanager";
 
 const PORT = 3000;
 const PUBLIC_DIR = path.join(__dirname, "../public");
@@ -55,12 +56,24 @@ const io = new Server(server, {
   }
 });
 
+const gameManager = new GameManager();
+
 // Socket.IO Connection Handling
 io.on("connection", (socket) => {
+  // When a user connects, log the connection
   console.log(`User connected: ${socket.id}`);
-
+  // Then find an open player slot and assign that player
+  var position = gameManager.getOpenPlayerSlot();
+  if (position){
+      gameManager.assignPlayer(socket.id, position);
+  }
   
+  // Send the current game state to the newly connected player
+  socket.emit("gameState", gameManager.packageGameStateJSON());
+
+  // Handle player disconnection
   socket.on("disconnect", () => {
+    //TODO handle player disconnection
     console.log(`User disconnected: ${socket.id}`);
   });
 });

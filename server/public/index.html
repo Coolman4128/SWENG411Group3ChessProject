@@ -3,9 +3,24 @@
 <head>
   <meta charset="UTF-8" />
   <title>Chess Game</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      background-color: #f0f0f0;
+      font-family: Arial, sans-serif;
+    }
+    #chessCanvas {
+      border: 2px solid #333;
+      background-color: white;
+      display: block;
+      margin: 20px auto;
+    }
+  </style>
 </head>
 <body>
-  <h1 id="greet">Loading...</h1>
+  <h1 id="greet">Chess Game</h1>
+  <canvas id="chessCanvas" width="640" height="640"></canvas>
   <script src="client.js"></script>
 </body>
 </html>

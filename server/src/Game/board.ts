@@ -2,14 +2,10 @@ import { PieceType } from "../Enums/pieces";
 import { Piece } from "./piece";
 
 export class Board {
-    private squares: number[][] = [];
-    private pieces: Piece[] = [];
+    public squares: number[][] = [];
+    public pieces: Piece[] = [];
 
-    constructor(fromJSON:boolean = false) {
-        if (fromJSON) {
-            // If this is being constructed from JSON, we don't initialize the board
-            return;
-        }
+    constructor() {
         this.initializeBoard();
     }
 
@@ -31,9 +27,9 @@ export class Board {
         }
 
         this.addPiece(new Piece(PieceType.ROOK, "white"), 7, 0);
-        this.addPiece(new Piece(PieceType.KNIGHT, "white"), 7, 1);
-        this.addPiece(new Piece(PieceType.BISHOP, "white"), 7, 2);
-        this.addPiece(new Piece(PieceType.QUEEN, "white"), 7, 3);
+        this.addPiece(new Piece(PieceType.ROOK, "white"), 7, 1);
+        this.addPiece(new Piece(PieceType.ROOK, "white"), 7, 2);
+        this.addPiece(new Piece(PieceType.ROOK, "white"), 7, 3);
         this.addPiece(new Piece(PieceType.KING, "white"), 7, 4);
         this.addPiece(new Piece(PieceType.BISHOP, "white"), 7, 5);
         this.addPiece(new Piece(PieceType.KNIGHT, "white"), 7, 6);
@@ -86,13 +82,6 @@ export class Board {
         this.squares[toX][toY] = piece.id;
         this.squares[fromX][fromY] = 0;
         return true;
-    }
-
-    public static getBoardFromJSON(jsonData: any): Board {
-        const board = new Board(true);
-        board.squares = jsonData.squares || [];
-        board.pieces = (jsonData.pieces || []).map((pieceData: any) => new Piece(pieceData.type, pieceData.color, pieceData.id));
-        return board;
     }
 
     
