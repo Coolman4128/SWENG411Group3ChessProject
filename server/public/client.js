@@ -3617,14 +3617,8 @@
 
   // src/Game/gamestate.ts
   var GameState = class {
-    constructor(jsonData) {
-      console.log("Initializing GameState with data:", jsonData);
+    constructor(jsonData, playerID = "") {
       const data = jsonData;
-      console.log("Available properties:", Object.keys(data));
-      console.log("whitePlayer:", data.whitePlayer);
-      console.log("blackPlayer:", data.blackPlayer);
-      console.log("currentTurn:", data.currentTurn);
-      console.log("board exists:", data.board !== void 0);
       this.whitePlayer = data.whitePlayer || null;
       this.blackPlayer = data.blackPlayer || null;
       this.currentTurn = data.currentTurn || "white";
@@ -3650,7 +3644,7 @@
       this.playerID = playerID;
     }
     loadGameState(jsonData) {
-      this.gameState = new GameState(jsonData);
+      this.gameState = new GameState(jsonData, this.playerID);
       if (this.gameState.whitePlayer === this.playerID) {
         this.playerColor = "white";
       } else if (this.gameState.blackPlayer === this.playerID) {
@@ -3704,7 +3698,8 @@
         console.log(`Clicked on square: ${row}, ${col}`);
         const piece = gameManager.getBoard().getPieceAt(row, col);
         if (piece) {
-          console.log(`Piece found: ${piece.getPiecePNG()}`);
+          console.log(`Piece at clicked square: ${piece.getPiecePNG()}`);
+          console.log(`Piece type: ${piece.getType()}, color: ${piece.getColor()}`);
         }
       });
       setTimeout(() => {

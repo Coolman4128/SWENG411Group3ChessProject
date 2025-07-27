@@ -47,7 +47,10 @@ function initializeChessGame(): void {
       console.log(`Clicked on square: ${row}, ${col}`);
       const piece = gameManager.getBoard().getPieceAt(row, col);
       if (piece) {
-        
+        console.log(`Piece at clicked square: ${piece.getPiecePNG()}`);
+        // Here you would handle the piece movement logic
+        // For now, just log the piece type and color
+        console.log(`Piece type: ${piece.getType()}, color: ${piece.getColor()}`);
       }
     });
 
