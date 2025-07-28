@@ -27,9 +27,9 @@ export class Board {
         }
 
         this.addPiece(new Piece(PieceType.ROOK, "white"), 7, 0);
-        this.addPiece(new Piece(PieceType.ROOK, "white"), 7, 1);
-        this.addPiece(new Piece(PieceType.ROOK, "white"), 7, 2);
-        this.addPiece(new Piece(PieceType.ROOK, "white"), 7, 3);
+        this.addPiece(new Piece(PieceType.KNIGHT, "white"), 7, 1);
+        this.addPiece(new Piece(PieceType.BISHOP, "white"), 7, 2);
+        this.addPiece(new Piece(PieceType.QUEEN, "white"), 7, 3);
         this.addPiece(new Piece(PieceType.KING, "white"), 7, 4);
         this.addPiece(new Piece(PieceType.BISHOP, "white"), 7, 5);
         this.addPiece(new Piece(PieceType.KNIGHT, "white"), 7, 6);

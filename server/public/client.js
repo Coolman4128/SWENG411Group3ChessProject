@@ -3386,11 +3386,16 @@
     async loadImages() {
       this.boardImage = new Image();
       this.boardImage.src = "./rect-8x8.png";
+      this.selectorImage = new Image();
+      this.selectorImage.src = "./selector_square.png";
       const pieceTypes = ["pawn", "rook", "knight", "bishop", "queen", "king"];
       const colors = ["white", "black"];
       const imagePromises = [];
       imagePromises.push(new Promise((resolve) => {
         this.boardImage.onload = () => resolve();
+      }));
+      imagePromises.push(new Promise((resolve) => {
+        this.selectorImage.onload = () => resolve();
       }));
       for (const color of colors) {
         for (const piece of pieceTypes) {
@@ -3407,34 +3412,57 @@
       this.imagesLoaded = true;
       console.log("All images loaded successfully");
     }
-    drawBoard(board) {
+    drawBoard(board, selectPiece) {
       if (!this.imagesLoaded) {
         console.warn("Images not loaded yet, retrying in 100ms...");
-        setTimeout(() => this.drawBoard(board), 100);
+        setTimeout(() => this.drawBoard(board, selectPiece), 100);
         return;
       }
       this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
       this.ctx.drawImage(this.boardImage, 0, 0, this.canvas.width, this.canvas.height);
-      this.drawPieces(board);
+      if (selectPiece) {
+        this.drawValidMoves(board, selectPiece);
+      }
+      this.drawPieces(board, selectPiece);
     }
-    drawPieces(board) {
+    drawValidMoves(board, selectPiece) {
+      const currentPos = board.getPiecePosition(selectPiece);
+      if (!currentPos) {
+        return;
+      }
+      const validMoves = selectPiece.getValidMoves(currentPos);
+      for (const move of validMoves) {
+        if (move.x >= 0 && move.x < 8 && move.y >= 0 && move.y < 8) {
+          const x = move.y * this.squareSize;
+          const y = move.x * this.squareSize;
+          this.ctx.drawImage(this.selectorImage, x, y, this.squareSize, this.squareSize);
+        }
+      }
+    }
+    drawPieces(board, selectPiece = null) {
       const squares = board.getSquares();
       for (let row = 0; row < 8; row++) {
         for (let col = 0; col < 8; col++) {
           const piece = board.getPieceAt(row, col);
           if (piece) {
-            this.drawPiece(piece, row, col);
+            const isSelected = selectPiece !== null && piece.id === selectPiece.id;
+            this.drawPiece(piece, row, col, isSelected);
           }
         }
       }
     }
-    drawPiece(piece, row, col) {
+    drawPiece(piece, row, col, isSelected = false) {
       const imageName = piece.getPiecePNG();
       const image = this.pieceImages.get(imageName);
       if (image) {
         const x = col * this.squareSize;
         const y = row * this.squareSize;
         this.ctx.drawImage(image, x, y, this.squareSize, this.squareSize);
+        if (isSelected) {
+          this.ctx.strokeStyle = "yellow";
+          this.ctx.lineWidth = 4;
+          this.ctx.strokeRect(x + 2, y + 2, this.squareSize - 4, this.squareSize - 4);
+        }
       } else {
         console.warn(`Image not found for piece: ${imageName}`);
       }
@@ -3470,8 +3498,15 @@
   };
 
   // src/Game/piece.ts
+  var BoardCords = class {
+    constructor(x, y) {
+      this.x = x;
+      this.y = y;
+    }
+  };
   var _Piece = class _Piece {
     constructor(type, color, id = -1) {
+      this.hasMoved = false;
       this.type = type;
       if (color !== "white" && color !== "black") {
         throw new Error("Invalid color. Must be 'white' or 'black'.");
@@ -3533,6 +3568,73 @@
     }
     getColor() {
       return this.color;
+    }
+    getValidMoves(currentPos) {
+      let validMoves = [];
+      switch (this.type) {
+        case 1 /* PAWN */:
+          if (this.hasMoved === true) {
+            validMoves.push(new BoardCords(currentPos.x, currentPos.y + 2));
+          }
+          validMoves.push(new BoardCords(currentPos.x, currentPos.y + 1));
+          break;
+        case 2 /* ROOK */:
+          for (let i = 1; i < 8; i++) {
+            validMoves.push(new BoardCords(i, currentPos.y));
+          }
+          for (let i = 1; i < 8; i++) {
+            validMoves.push(new BoardCords(currentPos.x, i));
+          }
+          break;
+        case 3 /* KNIGHT */:
+          validMoves.push(new BoardCords(currentPos.x + 2, currentPos.y + 1));
+          validMoves.push(new BoardCords(currentPos.x + 2, currentPos.y - 1));
+          validMoves.push(new BoardCords(currentPos.x - 2, currentPos.y + 1));
+          validMoves.push(new BoardCords(currentPos.x - 2, currentPos.y - 1));
+          validMoves.push(new BoardCords(currentPos.x + 1, currentPos.y + 2));
+          validMoves.push(new BoardCords(currentPos.x + 1, currentPos.y - 2));
+          validMoves.push(new BoardCords(currentPos.x - 1, currentPos.y + 2));
+          validMoves.push(new BoardCords(currentPos.x - 1, currentPos.y - 2));
+          break;
+        case 4 /* BISHOP */:
+          for (let i = 1; i < 8; i++) {
+            validMoves.push(new BoardCords(currentPos.x + i, currentPos.y + i));
+            validMoves.push(new BoardCords(currentPos.x - i, currentPos.y + i));
+            validMoves.push(new BoardCords(currentPos.x + i, currentPos.y - i));
+            validMoves.push(new BoardCords(currentPos.x - i, currentPos.y - i));
+          }
+          break;
+        case 5 /* QUEEN */:
+          for (let i = 1; i < 8; i++) {
+            validMoves.push(new BoardCords(i, currentPos.y));
+            validMoves.push(new BoardCords(currentPos.x, i));
+          }
+          for (let i = 1; i < 8; i++) {
+            validMoves.push(new BoardCords(currentPos.x + i, currentPos.y + i));
+            validMoves.push(new BoardCords(currentPos.x - i, currentPos.y + i));
+            validMoves.push(new BoardCords(currentPos.x + i, currentPos.y - i));
+            validMoves.push(new BoardCords(currentPos.x - i, currentPos.y - i));
+          }
+          break;
+        case 6 /* KING */:
+          validMoves.push(new BoardCords(currentPos.x + 1, currentPos.y));
+          validMoves.push(new BoardCords(currentPos.x - 1, currentPos.y));
+          validMoves.push(new BoardCords(currentPos.x, currentPos.y + 1));
+          validMoves.push(new BoardCords(currentPos.x, currentPos.y - 1));
+          validMoves.push(new BoardCords(currentPos.x + 1, currentPos.y + 1));
+          validMoves.push(new BoardCords(currentPos.x - 1, currentPos.y - 1));
+          validMoves.push(new BoardCords(currentPos.x + 1, currentPos.y - 1));
+          validMoves.push(new BoardCords(currentPos.x - 1, currentPos.y + 1));
+          break;
+        default:
+          throw new Error("Invalid piece type.");
+      }
+      validMoves = validMoves.filter((move) => move.x >= 1 && move.x <= 8 && move.y >= 1 && move.y <= 8);
+      validMoves = validMoves.filter((move) => move.x !== currentPos.x || move.y !== currentPos.y);
+      validMoves = validMoves.filter(
+        (move, index, self2) => index === self2.findIndex((m) => m.x === move.x && m.y === move.y)
+      );
+      return validMoves;
     }
   };
   _Piece.pieceCount = 1;
@@ -3613,15 +3715,32 @@
       board.pieces = (jsonData.pieces || []).map((pieceData) => new Piece(pieceData.type, pieceData.color, pieceData.id));
       return board;
     }
+    getPiecePosition(piece) {
+      const index = this.pieces.indexOf(piece);
+      if (index === -1) {
+        return null;
+      }
+      for (let x = 0; x < 8; x++) {
+        for (let y = 0; y < 8; y++) {
+          if (this.squares[x][y] === piece.id) {
+            return { x, y };
+          }
+        }
+      }
+      return null;
+    }
   };
 
   // src/Game/gamestate.ts
   var GameState = class {
     constructor(jsonData, playerID = "") {
+      // "white" or "black"
+      this.turnList = [];
       const data = jsonData;
       this.whitePlayer = data.whitePlayer || null;
       this.blackPlayer = data.blackPlayer || null;
       this.currentTurn = data.currentTurn || "white";
+      this.turnList = data.turnList || [];
       if (data.board === void 0) {
         console.log("Board is undefined, creating new board");
         this.board = new Board();
@@ -3634,11 +3753,18 @@
 
   // src/Game/gamemanager.ts
   var GameManager = class {
-    // "white" or "black" null for spectators
+    // Socket connection, if needed
     constructor() {
+      // "white" or "black" null for spectators
+      this.piece = null;
+      // Currently selected piece, if any
+      this.socket = null;
       this.playerID = "";
       this.playerColor = null;
       this.gameState = new GameState("{}");
+    }
+    setSocket(socket2) {
+      this.socket = socket2;
     }
     setPlayerID(playerID) {
       this.playerID = playerID;
@@ -3652,6 +3778,62 @@
       } else {
         this.playerColor = null;
       }
+    }
+    attemptTakePiece(pieceToTake) {
+      const selectedPiece = this.getSelectedPiece();
+      if (!selectedPiece) {
+        console.error("No piece selected to move.");
+        return;
+      }
+      const takePos = this.getBoard().getPiecePosition(pieceToTake);
+      const selectedPos = this.getBoard().getPiecePosition(selectedPiece);
+      if (!takePos) {
+        console.error("Piece to take not found on the board.");
+        return;
+      }
+      if (!selectedPos) {
+        console.error("Selected piece not found on the board.");
+        return;
+      }
+      const validMoves = selectedPiece.getValidMoves(selectedPos);
+      validMoves.forEach((move) => {
+        if (move.x === takePos.x && move.y === takePos.y) {
+          if (this.socket) {
+            this.socket.emit("takePiece", {
+              piece: selectedPiece.id,
+              target: pieceToTake.id,
+              from: { x: selectedPos.x, y: selectedPos.y },
+              to: { x: takePos.x, y: takePos.y },
+              playerID: this.playerID
+            });
+          }
+        }
+      });
+    }
+    attemptMovePiece(x, y) {
+      const selectedPiece = this.getSelectedPiece();
+      if (!selectedPiece) {
+        console.error("No piece selected to move.");
+        return;
+      }
+      const selectedPos = this.getBoard().getPiecePosition(selectedPiece);
+      if (!selectedPos) {
+        console.error("Selected piece not found on the board.");
+        return;
+      }
+      const validMoves = selectedPiece.getValidMoves(selectedPos);
+      validMoves.forEach((move) => {
+        if (move.x === x && move.y === y) {
+          if (this.socket) {
+            this.socket.emit("movePiece", {
+              piece: selectedPiece.id,
+              from: { x: selectedPos.x, y: selectedPos.y },
+              to: { x, y },
+              playerID: this.playerID
+            });
+          }
+        }
+      });
     }
     getBoard() {
       return this.gameState.board;
@@ -3667,6 +3849,12 @@
     }
     getPlayerColor() {
       return this.playerColor;
+    }
+    selectPiece(piece) {
+      this.piece = piece;
+    }
+    getSelectedPiece() {
+      return this.piece;
     }
   };
 
@@ -3698,9 +3886,15 @@
         console.log(`Clicked on square: ${row}, ${col}`);
         const piece = gameManager.getBoard().getPieceAt(row, col);
         if (piece) {
-          console.log(`Piece at clicked square: ${piece.getPiecePNG()}`);
-          console.log(`Piece type: ${piece.getType()}, color: ${piece.getColor()}`);
+          if (gameManager.getPlayerColor() === piece.getColor()) {
+            gameManager.selectPiece(piece);
+          } else if (gameManager.getSelectedPiece() !== null) {
+            gameManager.attemptTakePiece(piece);
+          }
+        } else {
+          gameManager.attemptMovePiece(row, col);
         }
+        drawGame(gameManager.getSelectedPiece());
       });
       setTimeout(() => {
         drawGame();
@@ -3709,13 +3903,13 @@
       console.error("Error initializing chess game:", error);
     }
   }
-  function drawGame() {
+  function drawGame(selectPiece = null) {
     if (canvasManager && canvasManager.isImagesLoaded()) {
       console.log("Drawing game board");
       console.log("Current board state:", gameManager.getBoard());
-      canvasManager.drawBoard(gameManager.getBoard());
+      canvasManager.drawBoard(gameManager.getBoard(), selectPiece);
     } else {
-      setTimeout(drawGame, 100);
+      setTimeout(() => drawGame(selectPiece), 100);
     }
   }
 })();

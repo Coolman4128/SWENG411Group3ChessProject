@@ -6,6 +6,8 @@ export class GameState {
 
     public currentTurn: string; // "white" or "black"
 
+    public turnList: string[][] = []; // List of turns made in the game
+
     public board: Board;
 
     constructor() {

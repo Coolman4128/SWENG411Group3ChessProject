@@ -71,6 +71,17 @@ io.on("connection", (socket) => {
   // Send the current game state to the newly connected player
   socket.emit("gameState", gameManager.packageGameStateJSON());
 
+  socket.on("takePiece", (data) => {
+    // handle piece taking
+    console.log(`Piece taken by ${socket.id}:`, data);
+  });
+
+  socket.on("movePiece", (data) => {
+    // handle piece movement
+    console.log(`Piece moved by ${socket.id}:`, data);
+
+  });
+
   // Handle player disconnection
   socket.on("disconnect", () => {
     //TODO handle player disconnection

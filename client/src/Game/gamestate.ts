@@ -6,6 +6,8 @@ export class GameState {
 
     public currentTurn: string; // "white" or "black"
 
+    public turnList: string[][] = []; // List of turns made in the game
+
     public board: Board;
 
     constructor(jsonData: any, playerID: string = "") {
@@ -13,6 +15,7 @@ export class GameState {
     this.whitePlayer = data.whitePlayer || null;
     this.blackPlayer = data.blackPlayer || null;
     this.currentTurn = data.currentTurn || "white";
+    this.turnList = data.turnList || [];
     
     if (data.board === undefined) {
         console.log("Board is undefined, creating new board");

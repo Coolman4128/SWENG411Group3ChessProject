@@ -1,11 +1,12 @@
 import { Board } from "./board";
-import { Piece } from "./piece";
+import { Piece, BoardCords } from "./piece";
 
 export class CanvasManager {
     private canvas: HTMLCanvasElement;
     private ctx: CanvasRenderingContext2D;
     private squareSize: number = 80;
     private boardImage!: HTMLImageElement;
+    private selectorImage!: HTMLImageElement;
     private pieceImages: Map<string, HTMLImageElement> = new Map();
     private imagesLoaded: boolean = false;
 
@@ -28,6 +29,10 @@ export class CanvasManager {
         this.boardImage = new Image();
         this.boardImage.src = './rect-8x8.png';
 
+        // Load the selector square image
+        this.selectorImage = new Image();
+        this.selectorImage.src = './selector_square.png';
+
         // Load all piece images
         const pieceTypes = ['pawn', 'rook', 'knight', 'bishop', 'queen', 'king'];
         const colors = ['white', 'black'];
@@ -37,6 +42,11 @@ export class CanvasManager {
         // Load board image
         imagePromises.push(new Promise((resolve) => {
             this.boardImage.onload = () => resolve();
+        }));
+
+        // Load selector image
+        imagePromises.push(new Promise((resolve) => {
+            this.selectorImage.onload = () => resolve();
         }));
 
         // Load piece images
@@ -58,10 +68,10 @@ export class CanvasManager {
         console.log('All images loaded successfully');
     }
 
-    public drawBoard(board: Board): void {
+    public drawBoard(board: Board, selectPiece: Piece | null): void {
         if (!this.imagesLoaded) {
             console.warn('Images not loaded yet, retrying in 100ms...');
-            setTimeout(() => this.drawBoard(board), 100);
+            setTimeout(() => this.drawBoard(board, selectPiece), 100);
             return;
         }
 
@@ -71,24 +81,50 @@ export class CanvasManager {
         // Draw the board background
         this.ctx.drawImage(this.boardImage, 0, 0, this.canvas.width, this.canvas.height);
 
+        // Draw valid move indicators if a piece is selected
+        if (selectPiece) {
+            this.drawValidMoves(board, selectPiece);
+        }
+
         // Draw the pieces
-        this.drawPieces(board);
+        this.drawPieces(board, selectPiece);
     }
 
-    private drawPieces(board: Board): void {
+    private drawValidMoves(board: Board, selectPiece: Piece): void {
+        const currentPos = board.getPiecePosition(selectPiece);
+        if (!currentPos) {
+            return;
+        }
+
+        const validMoves = selectPiece.getValidMoves(currentPos);
+        
+        for (const move of validMoves) {
+            // Check if the move is within board bounds
+            if (move.x >= 0 && move.x < 8 && move.y >= 0 && move.y < 8) {
+                const x = move.y * this.squareSize; // Note: move.y maps to canvas x (column)
+                const y = move.x * this.squareSize; // Note: move.x maps to canvas y (row)
+                
+                // Draw the selector square
+                this.ctx.drawImage(this.selectorImage, x, y, this.squareSize, this.squareSize);
+            }
+        }
+    }
+
+    private drawPieces(board: Board, selectPiece: Piece | null = null): void {
         const squares = board.getSquares();
         
         for (let row = 0; row < 8; row++) {
             for (let col = 0; col < 8; col++) {
                 const piece = board.getPieceAt(row, col);
                 if (piece) {
-                    this.drawPiece(piece, row, col);
+                    const isSelected = selectPiece !== null && piece.id === selectPiece.id;
+                    this.drawPiece(piece, row, col, isSelected);
                 }
             }
         }
     }
 
-    private drawPiece(piece: Piece, row: number, col: number): void {
+    private drawPiece(piece: Piece, row: number, col: number, isSelected: boolean = false): void {
         const imageName = piece.getPiecePNG();
         const image = this.pieceImages.get(imageName);
         
@@ -98,6 +134,13 @@ export class CanvasManager {
             
             // Draw the piece image scaled to fit the square
             this.ctx.drawImage(image, x, y, this.squareSize, this.squareSize);
+            
+            // Draw yellow border if piece is selected
+            if (isSelected) {
+                this.ctx.strokeStyle = 'yellow';
+                this.ctx.lineWidth = 4;
+                this.ctx.strokeRect(x + 2, y + 2, this.squareSize - 4, this.squareSize - 4);
+            }
         } else {
             console.warn(`Image not found for piece: ${imageName}`);
         }

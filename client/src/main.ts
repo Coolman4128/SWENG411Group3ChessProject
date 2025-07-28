@@ -47,11 +47,18 @@ function initializeChessGame(): void {
       console.log(`Clicked on square: ${row}, ${col}`);
       const piece = gameManager.getBoard().getPieceAt(row, col);
       if (piece) {
-        console.log(`Piece at clicked square: ${piece.getPiecePNG()}`);
-        // Here you would handle the piece movement logic
-        // For now, just log the piece type and color
-        console.log(`Piece type: ${piece.getType()}, color: ${piece.getColor()}`);
+        if (gameManager.getPlayerColor() === piece.getColor()){
+          gameManager.selectPiece(piece);
+        }
+        else if (gameManager.getSelectedPiece() !== null){
+          gameManager.attemptTakePiece(piece);
+        }
       }
+      else {
+        gameManager.attemptMovePiece(row, col);
+      }
+
+      drawGame(gameManager.getSelectedPiece());
     });
 
     // Wait a bit for images to load, then draw the board
@@ -65,13 +72,13 @@ function initializeChessGame(): void {
 }
 
 
-function drawGame(): void {
+function drawGame(selectPiece: Piece | null = null): void {
   if (canvasManager && canvasManager.isImagesLoaded()) {
     console.log("Drawing game board");
     console.log("Current board state:", gameManager.getBoard());
-    canvasManager.drawBoard(gameManager.getBoard());
+    canvasManager.drawBoard(gameManager.getBoard(), selectPiece);
   } else {
     // Retry drawing after a short delay if images aren't loaded yet
-    setTimeout(drawGame, 100);
+    setTimeout(() => drawGame(selectPiece), 100);
   }
 }

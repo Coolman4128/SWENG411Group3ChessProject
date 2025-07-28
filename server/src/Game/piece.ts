@@ -3,6 +3,7 @@ import { PieceType } from "../Enums/pieces";
 export class Piece{
     private type: PieceType;
     private color: string;
+    private hasMoved: boolean = false;
     
     private static pieceCount: number = 1;
     public id: number;

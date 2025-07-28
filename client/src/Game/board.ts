@@ -1,5 +1,5 @@
 import { PieceType } from "../Enums/pieces";
-import { Piece } from "./piece";
+import { BoardCords, Piece } from "./piece";
 
 export class Board {
     private squares: number[][] = [];
@@ -95,5 +95,20 @@ export class Board {
         return board;
     }
 
-    
+    public getPiecePosition(piece: Piece): BoardCords | null {
+        const index = this.pieces.indexOf(piece);
+        if (index === -1) {
+            return null;
+        }
+
+        for (let x = 0; x < 8; x++) {
+            for (let y = 0; y < 8; y++) {
+                if (this.squares[x][y] === piece.id) {
+                    return { x, y };
+                }
+            }
+        }
+
+        return null;
+    }
 }
