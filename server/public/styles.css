@@ -13,6 +13,207 @@ body {
   color: #f1f5f9;
 }
 
+/* Launch Screen Styles */
+.launch-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #1e3a8a 0%, #3730a3 50%, #1e1b4b 100%);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  transition: opacity 0.5s ease, visibility 0.5s ease;
+}
+
+.launch-screen.hidden {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.launch-content {
+  text-align: center;
+  animation: fadeInUp 1s ease-out;
+}
+
+.launch-logo {
+  font-size: 4rem;
+  font-weight: bold;
+  background: linear-gradient(45deg, #60a5fa, #3b82f6, #1d4ed8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 2rem;
+  letter-spacing: 2px;
+  text-shadow: 0 4px 20px rgba(59, 130, 246, 0.3);
+}
+
+.launch-button {
+  background: linear-gradient(45deg, #3b82f6, #1d4ed8);
+  color: white;
+  border: none;
+  padding: 1rem 2rem;
+  font-size: 1.2rem;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 20px rgba(59, 130, 246, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.launch-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 25px rgba(59, 130, 246, 0.6);
+  background: linear-gradient(45deg, #1d4ed8, #1e40af);
+}
+
+.launch-button:active {
+  transform: translateY(0);
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Lobby Dialog Styles */
+.lobby-dialog {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+  backdrop-filter: blur(5px);
+}
+
+.lobby-content {
+  background: linear-gradient(135deg, #1e40af, #3730a3);
+  border-radius: 20px;
+  padding: 2rem;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  min-width: 400px;
+  text-align: center;
+  animation: fadeInUp 0.5s ease-out;
+}
+
+.lobby-title {
+  font-size: 2rem;
+  font-weight: bold;
+  color: #f1f5f9;
+  margin-bottom: 1.5rem;
+  background: linear-gradient(45deg, #60a5fa, #3b82f6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.lobby-status {
+  margin-bottom: 2rem;
+}
+
+.status-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.status-label {
+  color: #cbd5e1;
+  font-weight: 500;
+}
+
+.status-value {
+  font-weight: bold;
+  padding: 0.25rem 0.75rem;
+  border-radius: 15px;
+  font-size: 0.9rem;
+}
+
+.status-value.connected {
+  background: #10b981;
+  color: white;
+}
+
+.status-value.waiting {
+  background: #f59e0b;
+  color: white;
+}
+
+.status-value.ready {
+  background: #10b981;
+  color: white;
+}
+
+.lobby-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+}
+
+.lobby-button {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.lobby-button.primary {
+  background: linear-gradient(45deg, #10b981, #059669);
+  color: white;
+}
+
+.lobby-button.primary:enabled:hover {
+  background: linear-gradient(45deg, #059669, #047857);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+}
+
+.lobby-button.primary:disabled {
+  background: #6b7280;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.lobby-button.secondary {
+  background: linear-gradient(45deg, #ef4444, #dc2626);
+  color: white;
+}
+
+.lobby-button.secondary:hover {
+  background: linear-gradient(45deg, #dc2626, #b91c1c);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+}
+
+/* Hide launch screen when game is active */
+.launch-screen.hidden {
+  display: none;
+}
+
 /* Banner Styles */
 .banner {
   background: linear-gradient(90deg, #0f172a 0%, #1e293b 100%);

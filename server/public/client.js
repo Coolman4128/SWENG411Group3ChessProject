@@ -3863,6 +3863,7 @@
   var canvasManager;
   var gameManager;
   document.addEventListener("DOMContentLoaded", () => {
+    setupLaunchScreen();
     initializeChessGame();
     socket.on("connect", () => {
       console.log("Connected to server:", socket.id);
@@ -3878,6 +3879,50 @@
       });
     });
   });
+  function setupLaunchScreen() {
+    const launchButton = document.getElementById("launchButton");
+    const launchScreen = document.getElementById("launchScreen");
+    const lobbyDialog = document.getElementById("lobbyDialog");
+    if (launchButton && launchScreen && lobbyDialog) {
+      launchButton.addEventListener("click", () => {
+        launchScreen.classList.add("hidden");
+        lobbyDialog.style.display = "flex";
+        setupLobby();
+      });
+    }
+  }
+  function setupLobby() {
+    const startGameBtn = document.getElementById("startGameBtn");
+    const leaveLobbyBtn = document.getElementById("leaveLobbyBtn");
+    const lobbyDialog = document.getElementById("lobbyDialog");
+    const gameContainer = document.getElementById("gameContainer");
+    const opponentStatus = document.getElementById("opponentStatus");
+    if (leaveLobbyBtn && lobbyDialog) {
+      leaveLobbyBtn.addEventListener("click", () => {
+        lobbyDialog.style.display = "none";
+        const launchScreen = document.getElementById("launchScreen");
+        if (launchScreen) {
+          launchScreen.classList.remove("hidden");
+        }
+      });
+    }
+    if (startGameBtn && lobbyDialog && gameContainer) {
+      startGameBtn.addEventListener("click", () => {
+        lobbyDialog.style.display = "none";
+        gameContainer.style.display = "flex";
+        setTimeout(() => {
+          drawGame();
+        }, 100);
+      });
+    }
+    setTimeout(() => {
+      if (opponentStatus && startGameBtn) {
+        opponentStatus.textContent = "Opponent joined!";
+        opponentStatus.className = "status-value ready";
+        startGameBtn.disabled = false;
+      }
+    }, 3e3);
+  }
   function initializeChessGame() {
     try {
       gameManager = new GameManager();

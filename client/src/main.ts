@@ -13,7 +13,10 @@ let gameManager: GameManager;
 let board: Board;
 
 document.addEventListener("DOMContentLoaded", () => {
-  // Initialize the game
+  // Set up launch button functionality
+  setupLaunchScreen();
+
+  // Initialize the game (but keep it hidden initially)
   initializeChessGame();
 
   // Socket.IO event listeners
@@ -35,6 +38,70 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 });
+
+function setupLaunchScreen(): void {
+  const launchButton = document.getElementById("launchButton");
+  const launchScreen = document.getElementById("launchScreen");
+  const lobbyDialog = document.getElementById("lobbyDialog");
+
+  if (launchButton && launchScreen && lobbyDialog) {
+    launchButton.addEventListener("click", () => {
+      // Hide launch screen
+      launchScreen.classList.add("hidden");
+      
+      // Show lobby dialog
+      lobbyDialog.style.display = "flex";
+      
+      // Initialize lobby functionality
+      setupLobby();
+    });
+  }
+}
+
+function setupLobby(): void {
+  const startGameBtn = document.getElementById("startGameBtn");
+  const leaveLobbyBtn = document.getElementById("leaveLobbyBtn");
+  const lobbyDialog = document.getElementById("lobbyDialog");
+  const gameContainer = document.getElementById("gameContainer");
+  const opponentStatus = document.getElementById("opponentStatus");
+
+  // Setup leave lobby button
+  if (leaveLobbyBtn && lobbyDialog) {
+    leaveLobbyBtn.addEventListener("click", () => {
+      // Hide lobby dialog and return to launch screen
+      lobbyDialog.style.display = "none";
+      const launchScreen = document.getElementById("launchScreen");
+      if (launchScreen) {
+        launchScreen.classList.remove("hidden");
+      }
+    });
+  }
+
+  // Setup start game button
+  if (startGameBtn && lobbyDialog && gameContainer) {
+    startGameBtn.addEventListener("click", () => {
+      // Hide lobby dialog
+      lobbyDialog.style.display = "none";
+      
+      // Show game container
+      gameContainer.style.display = "flex";
+      
+      // Redraw the game to ensure proper rendering
+      setTimeout(() => {
+        drawGame();
+      }, 100);
+    });
+  }
+
+  // Simulate opponent joining after 3 seconds (replace with actual socket logic later)
+  setTimeout(() => {
+    if (opponentStatus && startGameBtn) {
+      opponentStatus.textContent = "Opponent joined!";
+      opponentStatus.className = "status-value ready";
+      (startGameBtn as HTMLButtonElement).disabled = false;
+    }
+  }, 3000);
+}
 
 function initializeChessGame(): void {
   try {

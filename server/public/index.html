@@ -15,8 +15,44 @@
     </svg>
   </div>
 
+  <!-- Launch Screen -->
+  <div id="launchScreen" class="launch-screen">
+    <div class="launch-content">
+      <h1 class="launch-logo">Chess9000</h1>
+      <button id="launchButton" class="launch-button">Launch Chess9000</button>
+    </div>
+  </div>
+
+  <!-- Lobby Dialog -->
+  <div id="lobbyDialog" class="lobby-dialog" style="display: none;">
+    <div class="lobby-content">
+      <h2 class="lobby-title">Chess9000 Lobby</h2>
+      
+      <div class="lobby-status">
+        <div class="status-item">
+          <div class="status-label">Connection Status:</div>
+          <div class="status-value connected" id="connectionStatus">Connected</div>
+        </div>
+        
+        <div class="status-item">
+          <div class="status-label">Opponent Status:</div>
+          <div class="status-value waiting" id="opponentStatus">Waiting for opponent...</div>
+        </div>
+      </div>
+
+      <div class="lobby-actions">
+        <button id="startGameBtn" class="lobby-button primary" disabled>
+          Start Game
+        </button>
+        <button id="leaveLobbyBtn" class="lobby-button secondary">
+          Leave Lobby
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Main Container -->
-  <div class="container">
+  <div class="container" id="gameContainer" style="display: none;">
     <!-- Main Section -->
     <div class="main-section">
       <!-- Opponent Section -->
