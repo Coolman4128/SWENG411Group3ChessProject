@@ -1,4 +1,4 @@
-import { GameState } from "./gamestate";
+import { GameState, MoveResult } from "./gamestate";
 
 export class GameManager {
     private gameState: GameState;
@@ -8,12 +8,7 @@ export class GameManager {
     }
 
     public packageGameStateJSON(): string{
-        return JSON.stringify({
-            whitePlayer: this.gameState.whitePlayer,
-            blackPlayer: this.gameState.blackPlayer,
-            currentTurn: this.gameState.currentTurn,
-            board: this.gameState.board
-        });
+        return this.gameState.toJSON();
     }
 
     public getOpenPlayerSlot(): string | null {
@@ -38,5 +33,40 @@ export class GameManager {
         } else {
             throw new Error("Invalid position. Must be 'white' or 'black'.");
         }
+    }
+
+    /**
+     * Handles a move piece request
+     */
+    public handleMovePiece(
+        playerId: string,
+        fromX: number,
+        fromY: number,
+        toX: number,
+        toY: number,
+        eventEmitter?: (event: string, data: any) => void
+    ): MoveResult {
+        return this.gameState.movePiece(playerId, fromX, fromY, toX, toY, eventEmitter);
+    }
+
+    /**
+     * Handles a take piece request
+     */
+    public handleTakePiece(
+        playerId: string,
+        fromX: number,
+        fromY: number,
+        toX: number,
+        toY: number,
+        eventEmitter?: (event: string, data: any) => void
+    ): MoveResult {
+        return this.gameState.takePiece(playerId, fromX, fromY, toX, toY, eventEmitter);
+    }
+
+    /**
+     * Gets the current game state
+     */
+    public getGameState(): GameState {
+        return this.gameState;
     }
 }

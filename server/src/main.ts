@@ -72,14 +72,161 @@ io.on("connection", (socket) => {
   socket.emit("gameState", gameManager.packageGameStateJSON());
 
   socket.on("takePiece", (data) => {
-    // handle piece taking
-    console.log(`Piece taken by ${socket.id}:`, data);
+    try {
+      console.log(`Piece take attempt by ${socket.id}:`, data);
+      
+      // Extract coordinates from the data
+      const { from, to } = data;
+      if (!from || !to || typeof from !== 'object' || typeof to !== 'object') {
+        socket.emit("moveResult", { 
+          success: false, 
+          message: "Invalid coordinate data format." 
+        });
+        return;
+      }
+      
+      const fromX = from.x;
+      const fromY = from.y;
+      const toX = to.x;
+      const toY = to.y;
+      
+      // Create an event emitter function for this socket and broadcast to all clients
+      const eventEmitter = (event: string, eventData: any) => {
+        if (event === "gameState") {
+          // Broadcast game state to all clients
+          io.emit(event, eventData);
+        } else {
+          // Emit other events to all clients as well
+          io.emit(event, eventData);
+        }
+      };
+
+      const result = gameManager.handleTakePiece(
+        socket.id,
+        fromX,
+        fromY,
+        toX,
+        toY,
+        eventEmitter
+      );
+
+      // Send result back to the requesting client
+      socket.emit("moveResult", result);
+
+      if (!result.success) {
+        console.log(`Take piece failed: ${result.message}`);
+      } else {
+        console.log(`Piece successfully taken by ${socket.id}`);
+        if (result.isCheckmate) {
+          console.log("Game ended in checkmate!");
+          io.emit("gameEnded", { reason: "checkmate", winner: result.message });
+        } else if (result.isDraw) {
+          console.log("Game ended in draw!");
+          io.emit("gameEnded", { reason: "stalemate" });
+        }
+      }
+    } catch (error) {
+      console.error("Error handling take piece:", error);
+      socket.emit("moveResult", { 
+        success: false, 
+        message: "Server error occurred while processing move." 
+      });
+    }
   });
 
   socket.on("movePiece", (data) => {
-    // handle piece movement
-    console.log(`Piece moved by ${socket.id}:`, data);
+    try {
+      console.log(`Piece move attempt by ${socket.id}:`, data);
+      
+      // Validate input data
+      if (!data || typeof data !== 'object') {
+        socket.emit("moveResult", { 
+          success: false, 
+          message: "Invalid move data format." 
+        });
+        return;
+      }
+      
+      // Extract and validate coordinates from the data
+      const { from, to } = data;
+      
+      if (!from || !to || typeof from !== 'object' || typeof to !== 'object') {
+        socket.emit("moveResult", { 
+          success: false, 
+          message: "Invalid coordinate data format." 
+        });
+        return;
+      }
+      
+      const fromX = from.x;
+      const fromY = from.y;
+      const toX = to.x;
+      const toY = to.y;
+      
+      if (fromX === undefined || fromY === undefined || toX === undefined || toY === undefined) {
+        socket.emit("moveResult", { 
+          success: false, 
+          message: "Missing coordinate data." 
+        });
+        return;
+      }
+      
+      // Convert to numbers if they're strings
+      const fromXNum = Number(fromX);
+      const fromYNum = Number(fromY);
+      const toXNum = Number(toX);
+      const toYNum = Number(toY);
+      
+      if (isNaN(fromXNum) || isNaN(fromYNum) || isNaN(toXNum) || isNaN(toYNum)) {
+        socket.emit("moveResult", { 
+          success: false, 
+          message: "Invalid coordinate values." 
+        });
+        return;
+      }
+      
+      // Create an event emitter function for this socket and broadcast to all clients
+      const eventEmitter = (event: string, eventData: any) => {
+        if (event === "gameState") {
+          // Broadcast game state to all clients
+          io.emit(event, eventData);
+        } else {
+          // Emit other events to all clients as well
+          io.emit(event, eventData);
+        }
+      };
 
+      const result = gameManager.handleMovePiece(
+        socket.id,
+        fromXNum,
+        fromYNum,
+        toXNum,
+        toYNum,
+        eventEmitter
+      );
+
+      // Send result back to the requesting client
+      socket.emit("moveResult", result);
+
+      if (!result.success) {
+        console.log(`Move failed: ${result.message}`);
+      } else {
+        console.log(`Piece successfully moved by ${socket.id}`);
+        if (result.isCheckmate) {
+          console.log("Game ended in checkmate!");
+          io.emit("gameEnded", { reason: "checkmate", winner: result.message });
+        } else if (result.isDraw) {
+          console.log("Game ended in draw!");
+          io.emit("gameEnded", { reason: "stalemate" });
+        }
+      }
+    } catch (error) {
+      console.error("Error handling move piece:", error);
+      socket.emit("moveResult", { 
+        success: false, 
+        message: "Server error occurred while processing move." 
+      });
+    }
   });
 
   // Handle player disconnection

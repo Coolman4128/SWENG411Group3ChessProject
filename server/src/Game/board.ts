@@ -59,6 +59,16 @@ export class Board {
     }
 
     public getPieceAt(x: number, y: number): Piece | null {
+        // Add bounds checking to prevent errors
+        if (x === undefined || y === undefined || x < 0 || x >= 8 || y < 0 || y >= 8) {
+            return null;
+        }
+        
+        // Ensure squares array is properly initialized
+        if (!this.squares || !this.squares[x]) {
+            return null;
+        }
+        
         const pieceId = this.squares[x][y];
         return pieceId ? this.pieces.find(piece => piece.id === pieceId) || null : null;
     }
@@ -71,17 +81,39 @@ export class Board {
         if (toX < 0 || toX >= 8 || toY < 0 || toY >= 8) {
             throw new Error("Target coordinates out of bounds.");
         }
-        if (this.squares[toX][toY] !== 0) {
-            throw new Error("Target square is already occupied.");
-        }
 
+        // Check if there's a piece at the target location (for capture)
+        const targetPiece = this.getPieceAt(toX, toY);
+        
         // TODO: CHECK VALIDITY OF MOVE BASED ON PIECE TYPE AND GAME RULES
 
-        // TODO: IF PIECE IS THERE, ADD IT TO THE CAPTURED PIECES LIST
+        // If there's a piece at the target, remove it from the pieces array
+        if (targetPiece) {
+            this.removePiece(targetPiece.id);
+        }
         
         this.squares[toX][toY] = piece.id;
         this.squares[fromX][fromY] = 0;
         return true;
+    }
+
+    public removePiece(pieceId: number): boolean {
+        const pieceIndex = this.pieces.findIndex(piece => piece.id === pieceId);
+        if (pieceIndex !== -1) {
+            // Remove from pieces array
+            this.pieces.splice(pieceIndex, 1);
+            
+            // Remove from board squares
+            for (let x = 0; x < 8; x++) {
+                for (let y = 0; y < 8; y++) {
+                    if (this.squares[x][y] === pieceId) {
+                        this.squares[x][y] = 0;
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     
