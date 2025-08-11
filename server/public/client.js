@@ -3430,7 +3430,7 @@
       if (!currentPos) {
         return;
       }
-      const validMoves = selectPiece.getValidMoves(currentPos);
+      const validMoves = selectPiece.getValidMoves(currentPos, board);
       for (const move of validMoves) {
         if (move.x >= 0 && move.x < 8 && move.y >= 0 && move.y < 8) {
           const x = move.y * this.squareSize;
@@ -3503,6 +3503,9 @@
       this.x = x;
       this.y = y;
     }
+    equals(other) {
+      return this.x === other.x && this.y === other.y;
+    }
   };
   var _Piece = class _Piece {
     constructor(type, color, id = -1) {
@@ -3569,21 +3572,287 @@
     getColor() {
       return this.color;
     }
-    getValidMoves(currentPos) {
+    getHasMoved() {
+      return this.hasMoved;
+    }
+    setHasMoved(moved) {
+      this.hasMoved = moved;
+    }
+    getValidMoves(currentPos, board) {
+      if (!board) {
+        return this.getBasicMovementPattern(currentPos);
+      }
       let validMoves = [];
       switch (this.type) {
         case 1 /* PAWN */:
-          if (this.hasMoved === true) {
-            validMoves.push(new BoardCords(currentPos.x, currentPos.y + 2));
+          validMoves = this.getPawnMoves(currentPos, board);
+          break;
+        case 2 /* ROOK */:
+          validMoves = this.getRookMoves(currentPos, board);
+          break;
+        case 3 /* KNIGHT */:
+          validMoves = this.getKnightMoves(currentPos, board);
+          break;
+        case 4 /* BISHOP */:
+          validMoves = this.getBishopMoves(currentPos, board);
+          break;
+        case 5 /* QUEEN */:
+          validMoves = this.getQueenMoves(currentPos, board);
+          break;
+        case 6 /* KING */:
+          validMoves = this.getKingMoves(currentPos, board);
+          break;
+        default:
+          throw new Error("Invalid piece type.");
+      }
+      validMoves = this.filterMovesInCheck(currentPos, validMoves, board);
+      return validMoves;
+    }
+    getPawnMoves(currentPos, board) {
+      const validMoves = [];
+      const direction = this.color === "white" ? -1 : 1;
+      const oneForward = new BoardCords(currentPos.x + direction, currentPos.y);
+      if (this.isInBounds(oneForward) && !board.getPieceAt(oneForward.x, oneForward.y)) {
+        validMoves.push(oneForward);
+        if (!this.hasMoved) {
+          const twoForward = new BoardCords(currentPos.x + 2 * direction, currentPos.y);
+          if (this.isInBounds(twoForward) && !board.getPieceAt(twoForward.x, twoForward.y)) {
+            validMoves.push(twoForward);
           }
-          validMoves.push(new BoardCords(currentPos.x, currentPos.y + 1));
+        }
+      }
+      const captureLeft = new BoardCords(currentPos.x + direction, currentPos.y - 1);
+      const captureRight = new BoardCords(currentPos.x + direction, currentPos.y + 1);
+      if (this.isInBounds(captureLeft)) {
+        const pieceLeft = board.getPieceAt(captureLeft.x, captureLeft.y);
+        if (pieceLeft && pieceLeft.getColor() !== this.color) {
+          validMoves.push(captureLeft);
+        }
+      }
+      if (this.isInBounds(captureRight)) {
+        const pieceRight = board.getPieceAt(captureRight.x, captureRight.y);
+        if (pieceRight && pieceRight.getColor() !== this.color) {
+          validMoves.push(captureRight);
+        }
+      }
+      return validMoves;
+    }
+    getRookMoves(currentPos, board) {
+      const validMoves = [];
+      const directions = [
+        { x: 0, y: 1 },
+        // Right
+        { x: 0, y: -1 },
+        // Left
+        { x: 1, y: 0 },
+        // Down
+        { x: -1, y: 0 }
+        // Up
+      ];
+      for (const dir of directions) {
+        for (let i = 1; i < 8; i++) {
+          const newPos = new BoardCords(currentPos.x + dir.x * i, currentPos.y + dir.y * i);
+          if (!this.isInBounds(newPos)) break;
+          const pieceAtPos = board.getPieceAt(newPos.x, newPos.y);
+          if (!pieceAtPos) {
+            validMoves.push(newPos);
+          } else {
+            if (pieceAtPos.getColor() !== this.color) {
+              validMoves.push(newPos);
+            }
+            break;
+          }
+        }
+      }
+      return validMoves;
+    }
+    getKnightMoves(currentPos, board) {
+      const validMoves = [];
+      const knightMoves = [
+        { x: 2, y: 1 },
+        { x: 2, y: -1 },
+        { x: -2, y: 1 },
+        { x: -2, y: -1 },
+        { x: 1, y: 2 },
+        { x: 1, y: -2 },
+        { x: -1, y: 2 },
+        { x: -1, y: -2 }
+      ];
+      for (const move of knightMoves) {
+        const newPos = new BoardCords(currentPos.x + move.x, currentPos.y + move.y);
+        if (this.isInBounds(newPos)) {
+          const pieceAtPos = board.getPieceAt(newPos.x, newPos.y);
+          if (!pieceAtPos || pieceAtPos.getColor() !== this.color) {
+            validMoves.push(newPos);
+          }
+        }
+      }
+      return validMoves;
+    }
+    getBishopMoves(currentPos, board) {
+      const validMoves = [];
+      const directions = [
+        { x: 1, y: 1 },
+        // Down-right
+        { x: 1, y: -1 },
+        // Down-left
+        { x: -1, y: 1 },
+        // Up-right
+        { x: -1, y: -1 }
+        // Up-left
+      ];
+      for (const dir of directions) {
+        for (let i = 1; i < 8; i++) {
+          const newPos = new BoardCords(currentPos.x + dir.x * i, currentPos.y + dir.y * i);
+          if (!this.isInBounds(newPos)) break;
+          const pieceAtPos = board.getPieceAt(newPos.x, newPos.y);
+          if (!pieceAtPos) {
+            validMoves.push(newPos);
+          } else {
+            if (pieceAtPos.getColor() !== this.color) {
+              validMoves.push(newPos);
+            }
+            break;
+          }
+        }
+      }
+      return validMoves;
+    }
+    getQueenMoves(currentPos, board) {
+      return [...this.getRookMoves(currentPos, board), ...this.getBishopMoves(currentPos, board)];
+    }
+    getKingMoves(currentPos, board) {
+      const validMoves = [];
+      const kingMoves = [
+        { x: 1, y: 0 },
+        { x: -1, y: 0 },
+        { x: 0, y: 1 },
+        { x: 0, y: -1 },
+        { x: 1, y: 1 },
+        { x: -1, y: -1 },
+        { x: 1, y: -1 },
+        { x: -1, y: 1 }
+      ];
+      for (const move of kingMoves) {
+        const newPos = new BoardCords(currentPos.x + move.x, currentPos.y + move.y);
+        if (this.isInBounds(newPos)) {
+          const pieceAtPos = board.getPieceAt(newPos.x, newPos.y);
+          if (!pieceAtPos || pieceAtPos.getColor() !== this.color) {
+            validMoves.push(newPos);
+          }
+        }
+      }
+      return validMoves;
+    }
+    isInBounds(pos) {
+      return pos.x >= 0 && pos.x < 8 && pos.y >= 0 && pos.y < 8;
+    }
+    filterMovesInCheck(currentPos, moves, board) {
+      const validMoves = [];
+      for (const move of moves) {
+        if (!this.wouldMoveExposeKingToCheck(currentPos, move, board)) {
+          validMoves.push(move);
+        }
+      }
+      return validMoves;
+    }
+    wouldMoveExposeKingToCheck(from, to, board) {
+      const originalPiece = board.getPieceAt(to.x, to.y);
+      const movingPiece = board.getPieceAt(from.x, from.y);
+      board.squares[to.x][to.y] = movingPiece.id;
+      board.squares[from.x][from.y] = 0;
+      const kingPos = this.findKing(this.color, board);
+      let kingInCheck = false;
+      if (kingPos) {
+        const checkPos = this.type === 6 /* KING */ ? to : kingPos;
+        kingInCheck = this.isPositionUnderAttack(checkPos, this.color, board);
+      }
+      board.squares[from.x][from.y] = movingPiece.id;
+      board.squares[to.x][to.y] = originalPiece ? originalPiece.id : 0;
+      return kingInCheck;
+    }
+    findKing(color, board) {
+      for (let x = 0; x < 8; x++) {
+        for (let y = 0; y < 8; y++) {
+          const piece = board.getPieceAt(x, y);
+          if (piece && piece.getType() === 6 /* KING */ && piece.getColor() === color) {
+            return new BoardCords(x, y);
+          }
+        }
+      }
+      return null;
+    }
+    isPositionUnderAttack(pos, defendingColor, board) {
+      const attackingColor = defendingColor === "white" ? "black" : "white";
+      for (let x = 0; x < 8; x++) {
+        for (let y = 0; y < 8; y++) {
+          const piece = board.getPieceAt(x, y);
+          if (piece && piece.getColor() === attackingColor) {
+            const attackingMoves = piece.getBasicMovementPattern(new BoardCords(x, y));
+            if (piece.getType() === 1 /* PAWN */) {
+              const direction = piece.getColor() === "white" ? -1 : 1;
+              const leftAttack = new BoardCords(x + direction, y - 1);
+              const rightAttack = new BoardCords(x + direction, y + 1);
+              if ((leftAttack.equals(pos) || rightAttack.equals(pos)) && this.isInBounds(leftAttack) && this.isInBounds(rightAttack)) {
+                return true;
+              }
+            } else {
+              if (this.canPieceAttackPosition(piece, new BoardCords(x, y), pos, board)) {
+                return true;
+              }
+            }
+          }
+        }
+      }
+      return false;
+    }
+    canPieceAttackPosition(piece, piecePos, targetPos, board) {
+      const moves = piece.getBasicMovementPattern(piecePos);
+      for (const move of moves) {
+        if (move.equals(targetPos)) {
+          if (piece.getType() === 2 /* ROOK */ || piece.getType() === 4 /* BISHOP */ || piece.getType() === 5 /* QUEEN */) {
+            return this.isPathClear(piecePos, targetPos, board);
+          }
+          return true;
+        }
+      }
+      return false;
+    }
+    isPathClear(from, to, board) {
+      const dx = to.x - from.x;
+      const dy = to.y - from.y;
+      const stepX = dx === 0 ? 0 : dx > 0 ? 1 : -1;
+      const stepY = dy === 0 ? 0 : dy > 0 ? 1 : -1;
+      let currentX = from.x + stepX;
+      let currentY = from.y + stepY;
+      while (currentX !== to.x || currentY !== to.y) {
+        if (board.getPieceAt(currentX, currentY)) {
+          return false;
+        }
+        currentX += stepX;
+        currentY += stepY;
+      }
+      return true;
+    }
+    // Keep the original function for backward compatibility
+    getBasicMovementPattern(currentPos) {
+      let validMoves = [];
+      switch (this.type) {
+        case 1 /* PAWN */:
+          const direction = this.color === "white" ? -1 : 1;
+          validMoves.push(new BoardCords(currentPos.x + direction, currentPos.y));
+          if (!this.hasMoved) {
+            validMoves.push(new BoardCords(currentPos.x + 2 * direction, currentPos.y));
+          }
+          validMoves.push(new BoardCords(currentPos.x + direction, currentPos.y - 1));
+          validMoves.push(new BoardCords(currentPos.x + direction, currentPos.y + 1));
           break;
         case 2 /* ROOK */:
           for (let i = 1; i < 8; i++) {
-            validMoves.push(new BoardCords(i, currentPos.y));
-          }
-          for (let i = 1; i < 8; i++) {
-            validMoves.push(new BoardCords(currentPos.x, i));
+            validMoves.push(new BoardCords(currentPos.x, currentPos.y + i));
+            validMoves.push(new BoardCords(currentPos.x, currentPos.y - i));
+            validMoves.push(new BoardCords(currentPos.x + i, currentPos.y));
+            validMoves.push(new BoardCords(currentPos.x - i, currentPos.y));
           }
           break;
         case 3 /* KNIGHT */:
@@ -3606,8 +3875,10 @@
           break;
         case 5 /* QUEEN */:
           for (let i = 1; i < 8; i++) {
-            validMoves.push(new BoardCords(i, currentPos.y));
-            validMoves.push(new BoardCords(currentPos.x, i));
+            validMoves.push(new BoardCords(currentPos.x, currentPos.y + i));
+            validMoves.push(new BoardCords(currentPos.x, currentPos.y - i));
+            validMoves.push(new BoardCords(currentPos.x + i, currentPos.y));
+            validMoves.push(new BoardCords(currentPos.x - i, currentPos.y));
           }
           for (let i = 1; i < 8; i++) {
             validMoves.push(new BoardCords(currentPos.x + i, currentPos.y + i));
@@ -3629,12 +3900,77 @@
         default:
           throw new Error("Invalid piece type.");
       }
-      validMoves = validMoves.filter((move) => move.x >= 1 && move.x <= 8 && move.y >= 1 && move.y <= 8);
+      validMoves = validMoves.filter((move) => move.x >= 0 && move.x < 8 && move.y >= 0 && move.y < 8);
       validMoves = validMoves.filter((move) => move.x !== currentPos.x || move.y !== currentPos.y);
       validMoves = validMoves.filter(
         (move, index, self2) => index === self2.findIndex((m) => m.x === move.x && m.y === move.y)
       );
       return validMoves;
+    }
+    // Static helper methods for checking game state
+    static isPlayerInCheck(playerColor, board) {
+      const kingPos = _Piece.findKingPosition(playerColor, board);
+      if (!kingPos) return false;
+      return _Piece.isPositionUnderAttackStatic(kingPos, playerColor, board);
+    }
+    static findKingPosition(color, board) {
+      for (let x = 0; x < 8; x++) {
+        for (let y = 0; y < 8; y++) {
+          const piece = board.getPieceAt(x, y);
+          if (piece && piece.getType() === 6 /* KING */ && piece.getColor() === color) {
+            return new BoardCords(x, y);
+          }
+        }
+      }
+      return null;
+    }
+    static isPositionUnderAttackStatic(pos, defendingColor, board) {
+      const attackingColor = defendingColor === "white" ? "black" : "white";
+      for (let x = 0; x < 8; x++) {
+        for (let y = 0; y < 8; y++) {
+          const piece = board.getPieceAt(x, y);
+          if (piece && piece.getColor() === attackingColor) {
+            if (_Piece.canPieceAttackPositionStatic(piece, new BoardCords(x, y), pos, board)) {
+              return true;
+            }
+          }
+        }
+      }
+      return false;
+    }
+    static canPieceAttackPositionStatic(piece, piecePos, targetPos, board) {
+      if (piece.getType() === 1 /* PAWN */) {
+        const direction = piece.getColor() === "white" ? -1 : 1;
+        const leftAttack = new BoardCords(piecePos.x + direction, piecePos.y - 1);
+        const rightAttack = new BoardCords(piecePos.x + direction, piecePos.y + 1);
+        return leftAttack.equals(targetPos) || rightAttack.equals(targetPos);
+      }
+      const moves = piece.getBasicMovementPattern(piecePos);
+      for (const move of moves) {
+        if (move.equals(targetPos)) {
+          if (piece.getType() === 2 /* ROOK */ || piece.getType() === 4 /* BISHOP */ || piece.getType() === 5 /* QUEEN */) {
+            return _Piece.isPathClearStatic(piecePos, targetPos, board);
+          }
+          return true;
+        }
+      }
+      return false;
+    }
+    static isPathClearStatic(from, to, board) {
+      const dx = to.x - from.x;
+      const dy = to.y - from.y;
+      const stepX = dx === 0 ? 0 : dx > 0 ? 1 : -1;
+      const stepY = dy === 0 ? 0 : dy > 0 ? 1 : -1;
+      let currentX = from.x + stepX;
+      let currentY = from.y + stepY;
+      while (currentX !== to.x || currentY !== to.y) {
+        if (board.getPieceAt(currentX, currentY)) {
+          return false;
+        }
+        currentX += stepX;
+        currentY += stepY;
+      }
+      return true;
     }
   };
   _Piece.pieceCount = 1;
@@ -3723,7 +4059,7 @@
       for (let x = 0; x < 8; x++) {
         for (let y = 0; y < 8; y++) {
           if (this.squares[x][y] === piece.id) {
-            return { x, y };
+            return new BoardCords(x, y);
           }
         }
       }
@@ -3764,6 +4100,7 @@
       this.gameState = new GameState("{}");
     }
     setSocket(socket2) {
+      console.log("Setting socket:", socket2);
       this.socket = socket2;
     }
     setPlayerID(playerID) {
@@ -3795,7 +4132,7 @@
         console.error("Selected piece not found on the board.");
         return;
       }
-      const validMoves = selectedPiece.getValidMoves(selectedPos);
+      const validMoves = selectedPiece.getValidMoves(selectedPos, this.getBoard());
       validMoves.forEach((move) => {
         if (move.x === takePos.x && move.y === takePos.y) {
           if (this.socket) {
@@ -3821,16 +4158,22 @@
         console.error("Selected piece not found on the board.");
         return;
       }
-      const validMoves = selectedPiece.getValidMoves(selectedPos);
+      const validMoves = selectedPiece.getValidMoves(selectedPos, this.getBoard());
+      console.log("Attempting to move to:", x, y);
+      console.log("Valid moves:", validMoves);
+      console.log("Selected piece position:", selectedPos);
       validMoves.forEach((move) => {
         if (move.x === x && move.y === y) {
           if (this.socket) {
+            console.log("attempting move");
             this.socket.emit("movePiece", {
               piece: selectedPiece.id,
               from: { x: selectedPos.x, y: selectedPos.y },
               to: { x, y },
               playerID: this.playerID
             });
+          } else {
+            console.log("No socket connection available");
           }
         }
       });
@@ -3858,20 +4201,151 @@
     }
   };
 
+  // src/UI/chess9000ui.ts
+  var Chess9000UI = class _Chess9000UI {
+    constructor() {
+    }
+    static getInstance() {
+      if (!_Chess9000UI.instance) {
+        _Chess9000UI.instance = new _Chess9000UI();
+      }
+      return _Chess9000UI.instance;
+    }
+    /**
+     * Update the turn indicator
+     * @param isPlayerTurn - true if it's the player's turn, false if opponent's turn
+     */
+    updateTurnIndicator(isPlayerTurn) {
+      const indicator = document.getElementById("turnIndicator");
+      if (indicator) {
+        indicator.textContent = isPlayerTurn ? "Your Turn" : "Opponent's Turn";
+        indicator.className = `turn-indicator ${isPlayerTurn ? "your-turn" : "opponent-turn"}`;
+      }
+    }
+    /**
+     * Add a captured piece to the display
+     * @param piece - The captured piece details
+     * @param isPlayerCapture - true if player captured the piece, false if opponent did
+     */
+    addCapturedPiece(piece, isPlayerCapture) {
+      const containerId = isPlayerCapture ? "playerCaptured" : "opponentCaptured";
+      const container = document.getElementById(containerId);
+      if (container) {
+        const pieceElement = document.createElement("div");
+        pieceElement.className = "captured-piece";
+        pieceElement.style.backgroundImage = `url(${piece.imageUrl})`;
+        pieceElement.title = `${piece.color} ${piece.type}`;
+        container.appendChild(pieceElement);
+      }
+    }
+    /**
+     * Update the score display
+     * @param scores - Current game scores
+     */
+    updateScores(scores) {
+      const playerPieceCount = document.getElementById("playerPieceCount");
+      const playerScore = document.getElementById("playerScore");
+      const opponentPieceCount = document.getElementById("opponentPieceCount");
+      const opponentScore = document.getElementById("opponentScore");
+      if (playerPieceCount) playerPieceCount.textContent = scores.playerPieces.toString();
+      if (playerScore) playerScore.textContent = scores.playerScore.toString();
+      if (opponentPieceCount) opponentPieceCount.textContent = scores.opponentPieces.toString();
+      if (opponentScore) opponentScore.textContent = scores.opponentScore.toString();
+    }
+    /**
+     * Add a move to the move history
+     * @param move - The move details
+     */
+    addMove(move) {
+      const movesList = document.getElementById("movesList");
+      if (movesList) {
+        const moveElement = document.createElement("div");
+        moveElement.className = "move-item";
+        const moveNumber = document.createElement("span");
+        moveNumber.className = "move-number";
+        moveNumber.textContent = `${move.moveNumber}.`;
+        const moveNotation = document.createElement("span");
+        moveNotation.className = "move-notation";
+        moveNotation.textContent = move.blackMove ? `${move.whiteMove} ${move.blackMove}` : move.whiteMove;
+        moveElement.appendChild(moveNumber);
+        moveElement.appendChild(moveNotation);
+        movesList.appendChild(moveElement);
+        movesList.scrollTop = movesList.scrollHeight;
+      }
+    }
+    /**
+     * Clear all moves from the history
+     */
+    clearMoveHistory() {
+      const movesList = document.getElementById("movesList");
+      if (movesList) {
+        movesList.innerHTML = "";
+      }
+    }
+    /**
+     * Clear all captured pieces
+     */
+    clearCapturedPieces() {
+      const playerCaptured = document.getElementById("playerCaptured");
+      const opponentCaptured = document.getElementById("opponentCaptured");
+      if (playerCaptured) playerCaptured.innerHTML = "";
+      if (opponentCaptured) opponentCaptured.innerHTML = "";
+    }
+    /**
+     * Set up event listeners for the action buttons
+     * @param onRequestDraw - Callback for draw request
+     * @param onConcede - Callback for concede
+     */
+    setupActionButtons(onRequestDraw, onConcede) {
+      const drawBtn = document.getElementById("requestDrawBtn");
+      const concedeBtn = document.getElementById("concedeBtn");
+      if (drawBtn) {
+        drawBtn.addEventListener("click", onRequestDraw);
+      }
+      if (concedeBtn) {
+        concedeBtn.addEventListener("click", onConcede);
+      }
+    }
+    /**
+     * Enable or disable action buttons
+     * @param enabled - Whether buttons should be enabled
+     */
+    setActionButtonsEnabled(enabled) {
+      const drawBtn = document.getElementById("requestDrawBtn");
+      const concedeBtn = document.getElementById("concedeBtn");
+      if (drawBtn) drawBtn.disabled = !enabled;
+      if (concedeBtn) concedeBtn.disabled = !enabled;
+    }
+    /**
+     * Reset the UI to initial state
+     */
+    resetUI() {
+      this.clearMoveHistory();
+      this.clearCapturedPieces();
+      this.updateScores({ playerPieces: 0, playerScore: 0, opponentPieces: 0, opponentScore: 0 });
+      this.updateTurnIndicator(true);
+      this.setActionButtonsEnabled(true);
+    }
+  };
+
   // src/main.ts
   var socket = lookup2("http://localhost:3000");
   var canvasManager;
   var gameManager;
+  var ui;
   document.addEventListener("DOMContentLoaded", () => {
+    ui = Chess9000UI.getInstance();
     setupLaunchScreen();
     initializeChessGame();
     socket.on("connect", () => {
       console.log("Connected to server:", socket.id);
       gameManager.setPlayerID(socket.id ?? "");
+      gameManager.setSocket(socket);
       socket.on("gameState", (data) => {
         console.log("Received game state:", data);
         var dataObject = JSON.parse(data);
         gameManager.loadGameState(dataObject);
+        updateTurnIndicator();
         drawGame();
       });
       socket.on("disconnect", () => {
@@ -3955,6 +4429,12 @@
       canvasManager.drawBoard(gameManager.getBoard(), selectPiece);
     } else {
       setTimeout(() => drawGame(selectPiece), 100);
+    }
+  }
+  function updateTurnIndicator() {
+    if (ui && gameManager) {
+      const isPlayerTurn = gameManager.getIsTurn();
+      ui.updateTurnIndicator(isPlayerTurn);
     }
   }
 })();

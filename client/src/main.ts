@@ -4,6 +4,7 @@ import { Board } from "./Game/board";
 import { Piece } from "./Game/piece";
 import { PieceType } from "./Enums/pieces";
 import { GameManager } from "./Game/gamemanager";
+import { Chess9000UI } from "./UI/chess9000ui";
 
 // Initialize Socket.IO client for localhost on port 3000
 const socket = io("http://localhost:3000");
@@ -11,8 +12,12 @@ const socket = io("http://localhost:3000");
 let canvasManager: CanvasManager;
 let gameManager: GameManager;
 let board: Board;
+let ui: Chess9000UI;
 
 document.addEventListener("DOMContentLoaded", () => {
+  // Initialize the UI
+  ui = Chess9000UI.getInstance();
+  
   // Set up launch button functionality
   setupLaunchScreen();
 
@@ -24,12 +29,17 @@ document.addEventListener("DOMContentLoaded", () => {
     console.log("Connected to server:", socket.id);
 
     gameManager.setPlayerID(socket.id ?? "");
+    gameManager.setSocket(socket);
 
     socket.on("gameState", (data) => {
       console.log("Received game state:", data);
       // Update the game state in the game manager
       var dataObject = JSON.parse(data);
       gameManager.loadGameState(dataObject);
+      
+      // Update the turn indicator in the UI
+      updateTurnIndicator();
+      
       drawGame();
     });
 
@@ -147,5 +157,12 @@ function drawGame(selectPiece: Piece | null = null): void {
   } else {
     // Retry drawing after a short delay if images aren't loaded yet
     setTimeout(() => drawGame(selectPiece), 100);
+  }
+}
+
+function updateTurnIndicator(): void {
+  if (ui && gameManager) {
+    const isPlayerTurn = gameManager.getIsTurn();
+    ui.updateTurnIndicator(isPlayerTurn);
   }
 }

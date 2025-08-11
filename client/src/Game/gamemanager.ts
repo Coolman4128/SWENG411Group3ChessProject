@@ -20,6 +20,7 @@ export class GameManager {
     }
 
     public setSocket(socket: Socket): void {
+        console.log("Setting socket:", socket);
         this.socket = socket;
     }
 
@@ -55,7 +56,7 @@ export class GameManager {
             console.error("Selected piece not found on the board.");
             return;
         }
-        const validMoves = selectedPiece.getValidMoves(selectedPos);
+        const validMoves = selectedPiece.getValidMoves(selectedPos, this.getBoard());
         validMoves.forEach((move) => {
             if (move.x === takePos.x && move.y === takePos.y) {
                 // Send Socket Message to attempt to take the piece
@@ -86,17 +87,24 @@ export class GameManager {
             console.error("Selected piece not found on the board.");
             return;
         }
-        const validMoves = selectedPiece.getValidMoves(selectedPos);
+        const validMoves = selectedPiece.getValidMoves(selectedPos, this.getBoard());
+        console.log("Attempting to move to:", x, y);
+        console.log("Valid moves:", validMoves);
+        console.log("Selected piece position:", selectedPos);
+        
         validMoves.forEach((move) => {
             if (move.x === x && move.y === y) {
                 // Send Socket Message to attempt to move the piece
                 if (this.socket) {
+                    console.log("attempting move");
                     this.socket.emit("movePiece", {
                         piece: selectedPiece.id,
                         from: { x: selectedPos.x, y: selectedPos.y },
                         to: { x: x, y: y },
                         playerID: this.playerID,
                     });
+                } else {
+                    console.log("No socket connection available");
                 }
             }
         });

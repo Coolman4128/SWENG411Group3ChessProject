@@ -96,7 +96,7 @@ export class CanvasManager {
             return;
         }
 
-        const validMoves = selectPiece.getValidMoves(currentPos);
+        const validMoves = selectPiece.getValidMoves(currentPos, board);
         
         for (const move of validMoves) {
             // Check if the move is within board bounds

@@ -104,7 +104,7 @@ export class Board {
         for (let x = 0; x < 8; x++) {
             for (let y = 0; y < 8; y++) {
                 if (this.squares[x][y] === piece.id) {
-                    return { x, y };
+                    return new BoardCords(x, y);
                 }
             }
         }
