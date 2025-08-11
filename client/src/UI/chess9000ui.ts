@@ -7,10 +7,13 @@ export interface CapturedPiece {
 }
 
 export interface GameScore {
-  playerPieces: number;
   playerScore: number;
-  opponentPieces: number;
   opponentScore: number;
+}
+
+export interface GameTimers {
+  playerTime: number; // time in milliseconds
+  opponentTime: number; // time in milliseconds
 }
 
 export interface MoveEntry {
@@ -192,15 +195,36 @@ export class Chess9000UI {
    * @param scores - Current game scores
    */
   public updateScores(scores: GameScore): void {
-    const playerPieceCount = document.getElementById('playerPieceCount');
     const playerScore = document.getElementById('playerScore');
-    const opponentPieceCount = document.getElementById('opponentPieceCount');
     const opponentScore = document.getElementById('opponentScore');
 
-    if (playerPieceCount) playerPieceCount.textContent = scores.playerPieces.toString();
     if (playerScore) playerScore.textContent = scores.playerScore.toString();
-    if (opponentPieceCount) opponentPieceCount.textContent = scores.opponentPieces.toString();
     if (opponentScore) opponentScore.textContent = scores.opponentScore.toString();
+  }
+
+  /**
+   * Update the timer display
+   * @param timers - Current game timers
+   */
+  public updateTimers(timers: GameTimers): void {
+    const playerTime = document.getElementById('playerTime');
+    const opponentTime = document.getElementById('opponentTime');
+
+    if (playerTime) playerTime.textContent = this.formatTime(timers.playerTime);
+    if (opponentTime) opponentTime.textContent = this.formatTime(timers.opponentTime);
+  }
+
+  /**
+   * Format time in milliseconds to MM:SS
+   * @param timeMs - Time in milliseconds
+   * @returns Formatted time string
+   */
+  private formatTime(timeMs: number): string {
+    const totalSeconds = Math.max(0, Math.floor(timeMs / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    const secondsStr = seconds < 10 ? '0' + seconds : seconds.toString();
+    return `${minutes}:${secondsStr}`;
   }
 
   /**
@@ -292,7 +316,8 @@ export class Chess9000UI {
   public resetUI(): void {
     this.clearMoveHistory();
     this.clearCapturedPieces();
-    this.updateScores({ playerPieces: 0, playerScore: 0, opponentPieces: 0, opponentScore: 0 });
+    this.updateScores({ playerScore: 0, opponentScore: 0 });
+    this.updateTimers({ playerTime: 20 * 60 * 1000, opponentTime: 20 * 60 * 1000 });
     this.updateTurnIndicator(true); // Assuming player starts
     this.setActionButtonsEnabled(true);
   }

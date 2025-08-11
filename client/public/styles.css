@@ -270,7 +270,7 @@ body {
   flex: 2;
   background: rgba(255, 255, 255, 0.95);
   border-radius: 6px;
-  padding: 2rem;
+  padding: 1rem;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   display: flex;
   flex-direction: column;
@@ -280,8 +280,8 @@ body {
 
 /* Player Sections */
 .player-section {
-  margin-bottom: 0.75rem;
-  padding: 1rem;
+  margin-bottom: 0.5rem;
+  padding: 0.75rem;
   background: rgba(255, 255, 255, 0.9);
   border-radius: 4px;
   border: 1px solid #60a5fa;
@@ -294,7 +294,7 @@ body {
 
 .player-section.you {
   border-left: 3px solid #10b981;
-  margin-top: 0.75rem;
+  margin-top: 0.5rem;
   margin-bottom: 0;
 }
 
@@ -366,13 +366,24 @@ body {
   line-height: 1;
 }
 
+.score-value.time-display {
+  font-family: 'Courier New', monospace;
+  font-size: 0.85rem;
+  color: #1e40af;
+  background: linear-gradient(45deg, #f0f9ff, #e0f2fe);
+  border-radius: 2px;
+  padding: 1px 3px;
+}
+
 /* Chess Canvas */
 .canvas-container {
   display: flex;
   justify-content: center;
-  margin: 1rem 0;
-  flex: 1;
   align-items: center;
+  margin: 0.25rem 0;
+  flex: 1;
+  min-height: 320px; /* Minimum height to ensure canvas fits */
+  padding: 0;
 }
 
 #chessCanvas {
@@ -382,6 +393,7 @@ body {
   background: white;
   max-width: 100%;
   max-height: 100%;
+  /* Canvas will size itself via JavaScript */
 }
 
 /* Side Panel */
@@ -524,10 +536,18 @@ body {
 }
 
 /* Responsive Design */
+@media (max-width: 1200px) {
+  .container {
+    max-width: 100%;
+    padding: 1.5rem;
+  }
+}
+
 @media (max-width: 1024px) {
   .container {
     flex-direction: column;
     padding: 1rem;
+    height: auto; /* Allow height to be flexible */
   }
   
   .main-section,
@@ -535,10 +555,24 @@ body {
     flex: none;
   }
   
+  .main-section {
+    height: auto;
+    min-height: 500px; /* Ensure minimum space for board */
+  }
+  
+  .side-panel {
+    height: auto;
+    min-height: 300px;
+  }
+  
   .player-info {
     flex-direction: column;
     align-items: flex-start;
     gap: 1rem;
+  }
+  
+  .canvas-container {
+    min-height: 280px;
   }
 }
 
@@ -551,15 +585,70 @@ body {
     font-size: 1.5rem;
   }
   
+  .container {
+    padding: 0.5rem;
+  }
+  
+  .main-section {
+    padding: 1rem;
+    min-height: 450px;
+  }
+  
+  .side-panel {
+    padding: 1rem;
+  }
+  
+  .canvas-container {
+    margin: 0.5rem 0;
+    min-height: 250px;
+    padding: 0.25rem;
+  }
+  
   #chessCanvas {
-    width: 100%;
-    max-width: 480px;
-    height: auto;
+    border-width: 2px; /* Thinner border on small screens */
   }
   
   .score-info {
     flex-direction: column;
     gap: 0.5rem;
+  }
+  
+  .player-section {
+    margin-bottom: 0.5rem;
+    padding: 0.75rem;
+  }
+  
+  .player-section.you {
+    margin-top: 0.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
+    padding: 0.25rem;
+  }
+  
+  .main-section,
+  .side-panel {
+    padding: 0.75rem;
+  }
+  
+  .canvas-container {
+    min-height: 200px;
+    padding: 0.125rem;
+  }
+  
+  .player-section {
+    padding: 0.5rem;
+    margin-bottom: 0.25rem;
+  }
+  
+  .player-section.you {
+    margin-top: 0.25rem;
+  }
+  
+  #chessCanvas {
+    border-width: 1px;
   }
 }
 

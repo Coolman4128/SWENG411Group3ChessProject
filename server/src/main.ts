@@ -58,6 +58,42 @@ const io = new Server(server, {
 
 const gameManager = new GameManager();
 
+// Timer interval for checking timeouts and updating game state
+let gameTimer: NodeJS.Timeout | null = null;
+
+function startGameTimer() {
+  if (gameTimer) {
+    clearInterval(gameTimer);
+  }
+  
+  gameTimer = setInterval(() => {
+    // Check for timeouts
+    const timeoutResult = gameManager.checkForTimeout();
+    if (timeoutResult.isTimeOut) {
+      // End the game due to timeout
+      io.emit("gameEnded", { 
+        reason: "timeout", 
+        winner: timeoutResult.winner,
+        message: `${timeoutResult.winner} wins by timeout!`
+      });
+      console.log(`Game ended - ${timeoutResult.winner} won by timeout`);
+      clearInterval(gameTimer!);
+      gameTimer = null;
+      return;
+    }
+    
+    // Send updated game state to keep timers in sync
+    io.emit("gameState", gameManager.packageGameStateJSON());
+  }, 1000); // Update every second
+}
+
+function stopGameTimer() {
+  if (gameTimer) {
+    clearInterval(gameTimer);
+    gameTimer = null;
+  }
+}
+
 // Socket.IO Connection Handling
 io.on("connection", (socket) => {
   // When a user connects, log the connection
@@ -119,9 +155,11 @@ io.on("connection", (socket) => {
         console.log(`Piece successfully taken by ${socket.id}`);
         if (result.isCheckmate) {
           console.log("Game ended in checkmate!");
+          stopGameTimer();
           io.emit("gameEnded", { reason: "checkmate", winner: result.message });
         } else if (result.isDraw) {
           console.log("Game ended in draw!");
+          stopGameTimer();
           io.emit("gameEnded", { reason: "stalemate" });
         }
       }
@@ -214,9 +252,11 @@ io.on("connection", (socket) => {
         console.log(`Piece successfully moved by ${socket.id}`);
         if (result.isCheckmate) {
           console.log("Game ended in checkmate!");
+          stopGameTimer();
           io.emit("gameEnded", { reason: "checkmate", winner: result.message });
         } else if (result.isDraw) {
           console.log("Game ended in draw!");
+          stopGameTimer();
           io.emit("gameEnded", { reason: "stalemate" });
         }
       }
@@ -259,6 +299,7 @@ io.on("connection", (socket) => {
       
       if (data.accept) {
         // Draw accepted - end the game
+        stopGameTimer();
         io.emit("gameEnded", { reason: "draw" });
         console.log("Game ended in draw by agreement");
       } else {
@@ -280,7 +321,8 @@ io.on("connection", (socket) => {
       // Determine winner (the opponent of the conceding player)
       const opponentId = gameManager.getOpponentId(socket.id);
       
-      // End the game
+      // Stop the timer and end the game
+      stopGameTimer();
       io.emit("gameEnded", { 
         reason: "concede", 
         winner: opponentId,
@@ -301,6 +343,8 @@ io.on("connection", (socket) => {
       const gameState = gameManager.getGameState();
       if (gameState.whitePlayer && gameState.blackPlayer) {
         console.log("Both players connected, starting game...");
+        // Start the game timer
+        startGameTimer();
         // Broadcast game starting message to all clients
         io.emit("gameStarting");
       } else {
@@ -332,6 +376,7 @@ io.on("connection", (socket) => {
           const opponentId = gameManager.getOpponentId(socket.id);
           console.log(`Player ${socket.id} (${playerColor}) left during active game`);
           
+          stopGameTimer();
           io.emit("gameEnded", { 
             reason: "playerLeft", 
             winner: opponentId,

@@ -108,6 +108,13 @@ export class GameManager {
     }
 
     /**
+     * Checks if either player has run out of time
+     */
+    public checkForTimeout(): { isTimeOut: boolean; winner?: string } {
+        return this.gameState.checkTimeOut();
+    }
+
+    /**
      * Checks if a player is assigned to this game
      */
     public isPlayerInGame(playerId: string): boolean {

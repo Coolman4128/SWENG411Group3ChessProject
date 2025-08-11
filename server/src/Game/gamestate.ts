@@ -21,6 +21,12 @@ export class GameState {
 
     public board: Board;
 
+    // Timer properties (time in milliseconds)
+    public whiteTimeRemaining: number = 20 * 60 * 1000; // 20 minutes in milliseconds
+    public blackTimeRemaining: number = 20 * 60 * 1000; // 20 minutes in milliseconds
+    private turnStartTime: number = 0; // When the current turn started
+    private gameStarted: boolean = false; // Has the first move been made?
+
     constructor() {
         this.whitePlayer = null;
         this.blackPlayer = null;
@@ -71,6 +77,17 @@ export class GameState {
         // Record the move in algebraic notation
         const moveNotation = this.generateMoveNotation(piece, fromX, fromY, toX, toY, targetPiece);
         this.turnList.push([moveNotation]);
+
+        // Handle timer logic
+        if (!this.gameStarted) {
+            // First move - start the timer
+            this.gameStarted = true;
+            this.turnStartTime = Date.now();
+        } else {
+            // Update the time for the player who just moved
+            this.updateCurrentPlayerTime();
+            this.turnStartTime = Date.now();
+        }
 
         // Change turn
         this.currentTurn = this.currentTurn === "white" ? "black" : "white";
@@ -296,14 +313,67 @@ export class GameState {
     }
 
     /**
+     * Updates the time remaining for the current player
+     */
+    private updateCurrentPlayerTime(): void {
+        if (this.turnStartTime > 0) {
+            const elapsedTime = Date.now() - this.turnStartTime;
+            if (this.currentTurn === "white") {
+                this.whiteTimeRemaining = Math.max(0, this.whiteTimeRemaining - elapsedTime);
+            } else {
+                this.blackTimeRemaining = Math.max(0, this.blackTimeRemaining - elapsedTime);
+            }
+        }
+    }
+
+    /**
+     * Gets the current time remaining for both players, accounting for the current turn
+     */
+    public getCurrentTimeRemaining(): { whiteTime: number; blackTime: number } {
+        let whiteTime = this.whiteTimeRemaining;
+        let blackTime = this.blackTimeRemaining;
+
+        // If game has started and we're in the middle of a turn, subtract elapsed time
+        if (this.gameStarted && this.turnStartTime > 0) {
+            const elapsedTime = Date.now() - this.turnStartTime;
+            if (this.currentTurn === "white") {
+                whiteTime = Math.max(0, whiteTime - elapsedTime);
+            } else {
+                blackTime = Math.max(0, blackTime - elapsedTime);
+            }
+        }
+
+        return { whiteTime, blackTime };
+    }
+
+    /**
+     * Checks if either player has run out of time
+     */
+    public checkTimeOut(): { isTimeOut: boolean; winner?: string } {
+        const times = this.getCurrentTimeRemaining();
+        
+        if (times.whiteTime <= 0) {
+            return { isTimeOut: true, winner: "black" };
+        } else if (times.blackTime <= 0) {
+            return { isTimeOut: true, winner: "white" };
+        }
+        
+        return { isTimeOut: false };
+    }
+
+    /**
      * Converts the game state to JSON for transmission
      */
     public toJSON(): string {
+        const currentTimes = this.getCurrentTimeRemaining();
         return JSON.stringify({
             whitePlayer: this.whitePlayer,
             blackPlayer: this.blackPlayer,
             currentTurn: this.currentTurn,
             turnList: this.turnList,
+            whiteTimeRemaining: currentTimes.whiteTime,
+            blackTimeRemaining: currentTimes.blackTime,
+            gameStarted: this.gameStarted,
             board: {
                 squares: this.board.squares,
                 pieces: this.board.pieces.map(piece => ({

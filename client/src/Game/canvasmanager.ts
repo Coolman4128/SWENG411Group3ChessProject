@@ -22,6 +22,18 @@ export class CanvasManager {
             throw new Error('Could not get 2D context from canvas.');
         }
 
+        // Set up responsive canvas sizing
+        this.setupResponsiveCanvas();
+        
+        // Add window resize listener to handle screen size changes
+        window.addEventListener('resize', () => {
+            this.setupResponsiveCanvas();
+            // Redraw after resize if images are loaded
+            if (this.imagesLoaded) {
+                this.redrawCanvas();
+            }
+        });
+
         this.loadImages();
     }
 
@@ -75,6 +87,11 @@ export class CanvasManager {
             setTimeout(() => this.drawBoard(board, selectPiece, playerColor), 100);
             return;
         }
+
+        // Store the current state for potential redraws
+        this.lastBoard = board;
+        this.lastSelectPiece = selectPiece;
+        this.lastPlayerColor = playerColor;
 
         // Set flip state based on player color
         this.isFlipped = playerColor === "black";
@@ -216,5 +233,61 @@ export class CanvasManager {
 
     public isImagesLoaded(): boolean {
         return this.imagesLoaded;
+    }
+
+    private setupResponsiveCanvas(): void {
+        // Get the container dimensions
+        const container = this.canvas.parentElement;
+        if (!container) return;
+
+        // Calculate available space (considering padding and margins)
+        const containerRect = container.getBoundingClientRect();
+        const containerStyle = window.getComputedStyle(container);
+        
+        // Account for container padding
+        const paddingLeft = parseFloat(containerStyle.paddingLeft);
+        const paddingRight = parseFloat(containerStyle.paddingRight);
+        const paddingTop = parseFloat(containerStyle.paddingTop);
+        const paddingBottom = parseFloat(containerStyle.paddingBottom);
+        
+        const availableWidth = containerRect.width - paddingLeft - paddingRight;
+        const availableHeight = containerRect.height - paddingTop - paddingBottom;
+        
+        // Make it square and fit within available space - use 95% of available space for maximum sizing
+        const usableSize = Math.min(availableWidth, availableHeight) * 0.95;
+        const maxSize = Math.min(usableSize, 800); // Increased cap from 720 to 800
+        const minSize = 320; // Minimum size for very small screens
+        const boardSize = Math.max(minSize, maxSize);
+        
+        // Calculate square size (8x8 board)
+        this.squareSize = Math.floor(boardSize / 8);
+        const actualBoardSize = this.squareSize * 8;
+        
+        // Update canvas dimensions
+        this.canvas.width = actualBoardSize;
+        this.canvas.height = actualBoardSize;
+        
+        // Also set CSS dimensions to ensure proper display
+        this.canvas.style.width = actualBoardSize + 'px';
+        this.canvas.style.height = actualBoardSize + 'px';
+        
+        console.log(`Canvas resized to: ${actualBoardSize}x${actualBoardSize}, square size: ${this.squareSize}`);
+    }
+
+    private redrawCanvas(): void {
+        // Trigger a redraw with the last known state after canvas resize
+        this.redrawWithLastState();
+    }
+
+    // Store reference to last drawn board state for redraws
+    private lastBoard: Board | null = null;
+    private lastSelectPiece: Piece | null = null;
+    private lastPlayerColor: string | null = null;
+
+    // Method to trigger a complete redraw with last known state
+    public redrawWithLastState(): void {
+        if (this.lastBoard) {
+            this.drawBoard(this.lastBoard, this.lastSelectPiece, this.lastPlayerColor);
+        }
     }
 }

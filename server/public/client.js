@@ -3375,6 +3375,10 @@
       this.pieceImages = /* @__PURE__ */ new Map();
       this.imagesLoaded = false;
       this.isFlipped = false;
+      // Store reference to last drawn board state for redraws
+      this.lastBoard = null;
+      this.lastSelectPiece = null;
+      this.lastPlayerColor = null;
       this.canvas = document.getElementById(canvasId);
       if (!this.canvas) {
         throw new Error(`Canvas with id '${canvasId}' not found.`);
@@ -3383,6 +3387,13 @@
       if (!this.ctx) {
         throw new Error("Could not get 2D context from canvas.");
       }
+      this.setupResponsiveCanvas();
+      window.addEventListener("resize", () => {
+        this.setupResponsiveCanvas();
+        if (this.imagesLoaded) {
+          this.redrawCanvas();
+        }
+      });
       this.loadImages();
     }
     async loadImages() {
@@ -3420,6 +3431,9 @@
         setTimeout(() => this.drawBoard(board, selectPiece, playerColor), 100);
         return;
       }
+      this.lastBoard = board;
+      this.lastSelectPiece = selectPiece;
+      this.lastPlayerColor = playerColor;
       this.isFlipped = playerColor === "black";
       this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
       this.ctx.drawImage(this.boardImage, 0, 0, this.canvas.width, this.canvas.height);
@@ -3522,6 +3536,38 @@
     }
     isImagesLoaded() {
       return this.imagesLoaded;
+    }
+    setupResponsiveCanvas() {
+      const container = this.canvas.parentElement;
+      if (!container) return;
+      const containerRect = container.getBoundingClientRect();
+      const containerStyle = window.getComputedStyle(container);
+      const paddingLeft = parseFloat(containerStyle.paddingLeft);
+      const paddingRight = parseFloat(containerStyle.paddingRight);
+      const paddingTop = parseFloat(containerStyle.paddingTop);
+      const paddingBottom = parseFloat(containerStyle.paddingBottom);
+      const availableWidth = containerRect.width - paddingLeft - paddingRight;
+      const availableHeight = containerRect.height - paddingTop - paddingBottom;
+      const usableSize = Math.min(availableWidth, availableHeight) * 0.95;
+      const maxSize = Math.min(usableSize, 800);
+      const minSize = 320;
+      const boardSize = Math.max(minSize, maxSize);
+      this.squareSize = Math.floor(boardSize / 8);
+      const actualBoardSize = this.squareSize * 8;
+      this.canvas.width = actualBoardSize;
+      this.canvas.height = actualBoardSize;
+      this.canvas.style.width = actualBoardSize + "px";
+      this.canvas.style.height = actualBoardSize + "px";
+      console.log(`Canvas resized to: ${actualBoardSize}x${actualBoardSize}, square size: ${this.squareSize}`);
+    }
+    redrawCanvas() {
+      this.redrawWithLastState();
+    }
+    // Method to trigger a complete redraw with last known state
+    redrawWithLastState() {
+      if (this.lastBoard) {
+        this.drawBoard(this.lastBoard, this.lastSelectPiece, this.lastPlayerColor);
+      }
     }
   };
 
@@ -4093,18 +4139,31 @@
       }
       return null;
     }
+    getPieceById(id) {
+      return this.pieces.find((piece) => piece.id === id) || null;
+    }
   };
 
   // src/Game/gamestate.ts
   var GameState = class {
+    // Has the first move been made?
     constructor(jsonData, playerID = "") {
       // "white" or "black"
       this.turnList = [];
+      // Timer properties (time in milliseconds)
+      this.whiteTimeRemaining = 20 * 60 * 1e3;
+      // 20 minutes in milliseconds
+      this.blackTimeRemaining = 20 * 60 * 1e3;
+      // 20 minutes in milliseconds
+      this.gameStarted = false;
       const data = jsonData;
       this.whitePlayer = data.whitePlayer || null;
       this.blackPlayer = data.blackPlayer || null;
       this.currentTurn = data.currentTurn || "white";
       this.turnList = data.turnList || [];
+      this.whiteTimeRemaining = data.whiteTimeRemaining || 20 * 60 * 1e3;
+      this.blackTimeRemaining = data.blackTimeRemaining || 20 * 60 * 1e3;
+      this.gameStarted = data.gameStarted || false;
       if (data.board === void 0) {
         console.log("Board is undefined, creating new board");
         this.board = new Board();
@@ -4135,6 +4194,7 @@
       this.playerID = playerID;
     }
     loadGameState(jsonData) {
+      const selectedPieceId = this.piece?.id || null;
       this.gameState = new GameState(jsonData, this.playerID);
       if (this.gameState.whitePlayer === this.playerID) {
         this.playerColor = "white";
@@ -4142,6 +4202,10 @@
         this.playerColor = "black";
       } else {
         this.playerColor = null;
+      }
+      if (selectedPieceId !== null) {
+        const newSelectedPiece = this.gameState.board.getPieceById(selectedPieceId);
+        this.piece = newSelectedPiece;
       }
     }
     attemptTakePiece(pieceToTake) {
@@ -4224,8 +4288,27 @@
     selectPiece(piece) {
       this.piece = piece;
     }
+    clearSelection() {
+      this.piece = null;
+    }
     getSelectedPiece() {
       return this.piece;
+    }
+    getPlayerTime() {
+      if (this.playerColor === "white") {
+        return this.gameState.whiteTimeRemaining;
+      } else if (this.playerColor === "black") {
+        return this.gameState.blackTimeRemaining;
+      }
+      return 0;
+    }
+    getOpponentTime() {
+      if (this.playerColor === "white") {
+        return this.gameState.blackTimeRemaining;
+      } else if (this.playerColor === "black") {
+        return this.gameState.whiteTimeRemaining;
+      }
+      return 0;
     }
   };
 
@@ -4361,14 +4444,32 @@
      * @param scores - Current game scores
      */
     updateScores(scores) {
-      const playerPieceCount = document.getElementById("playerPieceCount");
       const playerScore = document.getElementById("playerScore");
-      const opponentPieceCount = document.getElementById("opponentPieceCount");
       const opponentScore = document.getElementById("opponentScore");
-      if (playerPieceCount) playerPieceCount.textContent = scores.playerPieces.toString();
       if (playerScore) playerScore.textContent = scores.playerScore.toString();
-      if (opponentPieceCount) opponentPieceCount.textContent = scores.opponentPieces.toString();
       if (opponentScore) opponentScore.textContent = scores.opponentScore.toString();
+    }
+    /**
+     * Update the timer display
+     * @param timers - Current game timers
+     */
+    updateTimers(timers) {
+      const playerTime = document.getElementById("playerTime");
+      const opponentTime = document.getElementById("opponentTime");
+      if (playerTime) playerTime.textContent = this.formatTime(timers.playerTime);
+      if (opponentTime) opponentTime.textContent = this.formatTime(timers.opponentTime);
+    }
+    /**
+     * Format time in milliseconds to MM:SS
+     * @param timeMs - Time in milliseconds
+     * @returns Formatted time string
+     */
+    formatTime(timeMs) {
+      const totalSeconds = Math.max(0, Math.floor(timeMs / 1e3));
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+      const secondsStr = seconds < 10 ? "0" + seconds : seconds.toString();
+      return `${minutes}:${secondsStr}`;
     }
     /**
      * Add a move to the move history
@@ -4440,7 +4541,8 @@
     resetUI() {
       this.clearMoveHistory();
       this.clearCapturedPieces();
-      this.updateScores({ playerPieces: 0, playerScore: 0, opponentPieces: 0, opponentScore: 0 });
+      this.updateScores({ playerScore: 0, opponentScore: 0 });
+      this.updateTimers({ playerTime: 20 * 60 * 1e3, opponentTime: 20 * 60 * 1e3 });
       this.updateTurnIndicator(true);
       this.setActionButtonsEnabled(true);
     }
@@ -4485,7 +4587,8 @@
         updateLobbyOpponentStatus(dataObject);
         updateTurnIndicator();
         updateMoveHistory(dataObject.turnList);
-        drawGame();
+        updateTimers();
+        drawGame(gameManager.getSelectedPiece());
       });
       socket.on("disconnect", () => {
         console.log("Disconnected from server");
@@ -4530,6 +4633,10 @@
           message = `Game ended - ${data.winner === socket.id ? "You won" : "You lost"} by checkmate!`;
         } else if (data.reason === "stalemate") {
           message = "Game ended in a stalemate!";
+        } else if (data.reason === "timeout") {
+          message = `Game ended - ${data.winner === gameManager.getPlayerColor() ? "You won" : "You lost"} by timeout!`;
+        } else if (data.reason === "playerLeft") {
+          message = `Game ended - ${data.winner === socket.id ? "You won" : "You lost"} because the opponent left!`;
         }
         ui.pulldownDialog(message, "OK", "").then(() => {
         });
@@ -4544,6 +4651,13 @@
           setTimeout(() => {
             drawGame();
           }, 100);
+        }
+      });
+      socket.on("moveResult", (result) => {
+        console.log("Move result:", result);
+        if (result.success) {
+          gameManager.clearSelection();
+          drawGame();
         }
       });
     });
@@ -4673,6 +4787,16 @@
           blackMove
         });
       }
+    }
+  }
+  function updateTimers() {
+    if (ui && gameManager) {
+      const playerTime = gameManager.getPlayerTime();
+      const opponentTime = gameManager.getOpponentTime();
+      ui.updateTimers({
+        playerTime,
+        opponentTime
+      });
     }
   }
   function updateCapturedPieces(captureData) {

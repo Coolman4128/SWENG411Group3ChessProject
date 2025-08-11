@@ -61,12 +61,12 @@
           <div class="player-title">Opponent</div>
           <div class="score-info">
             <div class="score-item">
-              <div class="score-label">Pieces</div>
-              <div class="score-value" id="opponentPieceCount">0</div>
-            </div>
-            <div class="score-item">
               <div class="score-label">Score</div>
               <div class="score-value" id="opponentScore">0</div>
+            </div>
+            <div class="score-item">
+              <div class="score-label">Time</div>
+              <div class="score-value time-display" id="opponentTime">20:00</div>
             </div>
           </div>
         </div>
@@ -79,7 +79,7 @@
 
       <!-- Chess Canvas -->
       <div class="canvas-container">
-        <canvas id="chessCanvas" width="640" height="640"></canvas>
+        <canvas id="chessCanvas"></canvas>
       </div>
 
       <!-- Player Section -->
@@ -88,12 +88,12 @@
           <div class="player-title">You</div>
           <div class="score-info">
             <div class="score-item">
-              <div class="score-label">Pieces</div>
-              <div class="score-value" id="playerPieceCount">0</div>
-            </div>
-            <div class="score-item">
               <div class="score-label">Score</div>
               <div class="score-value" id="playerScore">0</div>
+            </div>
+            <div class="score-item">
+              <div class="score-label">Time</div>
+              <div class="score-value time-display" id="playerTime">20:00</div>
             </div>
           </div>
         </div>

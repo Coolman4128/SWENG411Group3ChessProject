@@ -68,7 +68,11 @@ function initializeSocketConnection(): void {
       // Update move history in the UI
       updateMoveHistory(dataObject.turnList);
       
-      drawGame();
+      // Update timers in the UI
+      updateTimers();
+      
+      // Preserve the currently selected piece when redrawing
+      drawGame(gameManager.getSelectedPiece());
     });
 
     socket.on("disconnect", () => {
@@ -123,6 +127,10 @@ function initializeSocketConnection(): void {
         message = `Game ended - ${data.winner === socket.id ? "You won" : "You lost"} by checkmate!`;
       } else if (data.reason === "stalemate") {
         message = "Game ended in a stalemate!";
+      } else if (data.reason === "timeout") {
+        message = `Game ended - ${data.winner === gameManager.getPlayerColor() ? "You won" : "You lost"} by timeout!`;
+      } else if (data.reason === "playerLeft") {
+        message = `Game ended - ${data.winner === socket.id ? "You won" : "You lost"} because the opponent left!`;
       }
       
       ui.pulldownDialog(message, "OK", "").then(() => {
@@ -146,6 +154,16 @@ function initializeSocketConnection(): void {
         setTimeout(() => {
           drawGame();
         }, 100);
+      }
+    });
+
+    socket.on("moveResult", (result: any) => {
+      console.log("Move result:", result);
+      // If the move was successful, clear the selected piece
+      if (result.success) {
+        gameManager.clearSelection();
+        // Redraw the game to show the cleared selection
+        drawGame();
       }
     });
   });
@@ -321,6 +339,18 @@ function updateMoveHistory(turnList: string[][]): void {
         blackMove: blackMove
       });
     }
+  }
+}
+
+function updateTimers(): void {
+  if (ui && gameManager) {
+    const playerTime = gameManager.getPlayerTime();
+    const opponentTime = gameManager.getOpponentTime();
+    
+    ui.updateTimers({
+      playerTime: playerTime,
+      opponentTime: opponentTime
+    });
   }
 }
 

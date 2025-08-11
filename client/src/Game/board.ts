@@ -111,4 +111,8 @@ export class Board {
 
         return null;
     }
+
+    public getPieceById(id: number): Piece | null {
+        return this.pieces.find(piece => piece.id === id) || null;
+    }
 }

@@ -28,6 +28,9 @@ export class GameManager {
         this.playerID = playerID;
     }
     public loadGameState(jsonData: any): void {
+        // Preserve the currently selected piece ID before loading new state
+        const selectedPieceId = this.piece?.id || null;
+        
         this.gameState = new GameState(jsonData, this.playerID);
         if (this.gameState.whitePlayer === this.playerID) {
             this.playerColor = "white";
@@ -36,6 +39,12 @@ export class GameManager {
         }
         else {
             this.playerColor = null; // Spectator or not assigned
+        }
+        
+        // Restore the selected piece if one was previously selected
+        if (selectedPieceId !== null) {
+            const newSelectedPiece = this.gameState.board.getPieceById(selectedPieceId);
+            this.piece = newSelectedPiece;
         }
     }
 
@@ -132,7 +141,29 @@ export class GameManager {
         this.piece = piece;
     }
 
+    public clearSelection(): void {
+        this.piece = null;
+    }
+
     public getSelectedPiece(): Piece | null {
         return this.piece;
+    }
+
+    public getPlayerTime(): number {
+        if (this.playerColor === "white") {
+            return this.gameState.whiteTimeRemaining;
+        } else if (this.playerColor === "black") {
+            return this.gameState.blackTimeRemaining;
+        }
+        return 0;
+    }
+
+    public getOpponentTime(): number {
+        if (this.playerColor === "white") {
+            return this.gameState.blackTimeRemaining;
+        } else if (this.playerColor === "black") {
+            return this.gameState.whiteTimeRemaining;
+        }
+        return 0;
     }
 }
