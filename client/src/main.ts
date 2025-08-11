@@ -4,7 +4,7 @@ import { Board } from "./Game/board";
 import { Piece } from "./Game/piece";
 import { PieceType } from "./Enums/pieces";
 import { GameManager } from "./Game/gamemanager";
-import { Chess9000UI } from "./UI/chess9000ui";
+import { Chess9000UI, getPieceImageUrl } from "./UI/chess9000ui";
 
 // Initialize Socket.IO client for localhost on port 3000
 const socket = io("http://localhost:3000");
@@ -40,11 +40,20 @@ document.addEventListener("DOMContentLoaded", () => {
       // Update the turn indicator in the UI
       updateTurnIndicator();
       
+      // Update move history in the UI
+      updateMoveHistory(dataObject.turnList);
+      
       drawGame();
     });
 
     socket.on("disconnect", () => {
       console.log("Disconnected from server");
+    });
+    
+    socket.on("pieceCaptured", (data) => {
+      console.log("Piece captured:", data);
+      // Update captured pieces UI
+      updateCapturedPieces(data);
     });
   });
 });
@@ -119,6 +128,9 @@ function initializeChessGame(): void {
     gameManager = new GameManager();
     canvasManager = new CanvasManager("chessCanvas");
 
+    // Initialize UI and reset it to clean state
+    ui.resetUI();
+
     // Add click listener for piece movement
     canvasManager.addClickListener((row, col) => {
       console.log(`Clicked on square: ${row}, ${col}`);
@@ -164,5 +176,56 @@ function updateTurnIndicator(): void {
   if (ui && gameManager) {
     const isPlayerTurn = gameManager.getIsTurn();
     ui.updateTurnIndicator(isPlayerTurn);
+  }
+}
+
+function updateMoveHistory(turnList: string[][]): void {
+  if (ui && turnList) {
+    // Clear existing move history
+    ui.clearMoveHistory();
+    
+    // Group moves by pairs (white move, black move)
+    for (let i = 0; i < turnList.length; i += 2) {
+      const moveNumber = Math.floor(i / 2) + 1;
+      const whiteMove = turnList[i] ? turnList[i][0] : '';
+      const blackMove = turnList[i + 1] ? turnList[i + 1][0] : undefined;
+      
+      ui.addMove({
+        moveNumber: moveNumber,
+        whiteMove: whiteMove,
+        blackMove: blackMove
+      });
+    }
+  }
+}
+
+function updateCapturedPieces(captureData: any): void {
+  if (ui && captureData && captureData.piece) {
+    const piece = captureData.piece;
+    
+    // Convert piece type number to string
+    const pieceTypeString = getPieceTypeName(piece.type);
+    
+    // Determine if this was a player capture or opponent capture
+    const isPlayerCapture = piece.color !== gameManager.getPlayerColor();
+    
+    // Add the captured piece to the UI
+    ui.addCapturedPiece({
+      type: pieceTypeString,
+      color: piece.color,
+      imageUrl: getPieceImageUrl(pieceTypeString, piece.color)
+    }, isPlayerCapture);
+  }
+}
+
+function getPieceTypeName(pieceType: number): string {
+  switch (pieceType) {
+    case PieceType.PAWN: return 'pawn';
+    case PieceType.ROOK: return 'rook';
+    case PieceType.KNIGHT: return 'knight';
+    case PieceType.BISHOP: return 'bishop';
+    case PieceType.QUEEN: return 'queen';
+    case PieceType.KING: return 'king';
+    default: return 'unknown';
   }
 }

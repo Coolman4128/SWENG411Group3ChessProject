@@ -4327,6 +4327,9 @@
       this.setActionButtonsEnabled(true);
     }
   };
+  function getPieceImageUrl(piece, color) {
+    return `${color}-${piece}.png`;
+  }
 
   // src/main.ts
   var socket = lookup2("http://localhost:3000");
@@ -4346,10 +4349,15 @@
         var dataObject = JSON.parse(data);
         gameManager.loadGameState(dataObject);
         updateTurnIndicator();
+        updateMoveHistory(dataObject.turnList);
         drawGame();
       });
       socket.on("disconnect", () => {
         console.log("Disconnected from server");
+      });
+      socket.on("pieceCaptured", (data) => {
+        console.log("Piece captured:", data);
+        updateCapturedPieces(data);
       });
     });
   });
@@ -4401,6 +4409,7 @@
     try {
       gameManager = new GameManager();
       canvasManager = new CanvasManager("chessCanvas");
+      ui.resetUI();
       canvasManager.addClickListener((row, col) => {
         console.log(`Clicked on square: ${row}, ${col}`);
         const piece = gameManager.getBoard().getPieceAt(row, col);
@@ -4435,6 +4444,51 @@
     if (ui && gameManager) {
       const isPlayerTurn = gameManager.getIsTurn();
       ui.updateTurnIndicator(isPlayerTurn);
+    }
+  }
+  function updateMoveHistory(turnList) {
+    if (ui && turnList) {
+      ui.clearMoveHistory();
+      for (let i = 0; i < turnList.length; i += 2) {
+        const moveNumber = Math.floor(i / 2) + 1;
+        const whiteMove = turnList[i] ? turnList[i][0] : "";
+        const blackMove = turnList[i + 1] ? turnList[i + 1][0] : void 0;
+        ui.addMove({
+          moveNumber,
+          whiteMove,
+          blackMove
+        });
+      }
+    }
+  }
+  function updateCapturedPieces(captureData) {
+    if (ui && captureData && captureData.piece) {
+      const piece = captureData.piece;
+      const pieceTypeString = getPieceTypeName(piece.type);
+      const isPlayerCapture = piece.color !== gameManager.getPlayerColor();
+      ui.addCapturedPiece({
+        type: pieceTypeString,
+        color: piece.color,
+        imageUrl: getPieceImageUrl(pieceTypeString, piece.color)
+      }, isPlayerCapture);
+    }
+  }
+  function getPieceTypeName(pieceType) {
+    switch (pieceType) {
+      case 1 /* PAWN */:
+        return "pawn";
+      case 2 /* ROOK */:
+        return "rook";
+      case 3 /* KNIGHT */:
+        return "knight";
+      case 4 /* BISHOP */:
+        return "bishop";
+      case 5 /* QUEEN */:
+        return "queen";
+      case 6 /* KING */:
+        return "king";
+      default:
+        return "unknown";
     }
   }
 })();
