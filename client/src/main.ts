@@ -6,8 +6,8 @@ import { PieceType } from "./Enums/pieces";
 import { GameManager } from "./Game/gamemanager";
 import { Chess9000UI, getPieceImageUrl } from "./UI/chess9000ui";
 
-// Initialize Socket.IO client - connect to the same host and port as the webpage
-const socket = io();
+// Socket will be initialized when user clicks launch button
+let socket: any = null;
 
 let canvasManager: CanvasManager;
 let gameManager: GameManager;
@@ -33,6 +33,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Initialize the game (but keep it hidden initially)
   initializeChessGame();
+});
+
+function initializeSocketConnection(): void {
+  // Initialize Socket.IO client - connect to the same host and port as the webpage
+  socket = io();
 
   // Socket.IO event listeners
   socket.on("connect", () => {
@@ -41,11 +46,21 @@ document.addEventListener("DOMContentLoaded", () => {
     gameManager.setPlayerID(socket.id ?? "");
     gameManager.setSocket(socket);
 
-    socket.on("gameState", (data) => {
+    // Update connection status in lobby
+    const connectionStatus = document.getElementById("connectionStatus");
+    if (connectionStatus) {
+      connectionStatus.textContent = "Connected";
+      connectionStatus.className = "status-value connected";
+    }
+
+    socket.on("gameState", (data: any) => {
       console.log("Received game state:", data);
       // Update the game state in the game manager
       var dataObject = JSON.parse(data);
       gameManager.loadGameState(dataObject);
+      
+      // Update lobby opponent status based on game state
+      updateLobbyOpponentStatus(dataObject);
       
       // Update the turn indicator in the UI
       updateTurnIndicator();
@@ -58,15 +73,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
     socket.on("disconnect", () => {
       console.log("Disconnected from server");
+      // Update connection status in lobby
+      const connectionStatus = document.getElementById("connectionStatus");
+      if (connectionStatus) {
+        connectionStatus.textContent = "Disconnected";
+        connectionStatus.className = "status-value disconnected";
+      }
     });
     
-    socket.on("pieceCaptured", (data) => {
+    socket.on("pieceCaptured", (data: any) => {
       console.log("Piece captured:", data);
       // Update captured pieces UI
       updateCapturedPieces(data);
     });
 
-    socket.on("drawRequest", async (data) => {
+    socket.on("drawRequest", async (data: any) => {
       console.log("Draw request received:", data);
       const result = await ui.pulldownDialog(
         "Your opponent has requested a draw. Do you accept?",
@@ -91,7 +112,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 
-    socket.on("gameEnded", (data) => {
+    socket.on("gameEnded", (data: any) => {
       console.log("Game ended:", data);
       let message = "";
       if (data.reason === "draw") {
@@ -108,8 +129,49 @@ document.addEventListener("DOMContentLoaded", () => {
         // Could add logic to return to lobby or restart game
       });
     });
+
+    socket.on("gameStarting", () => {
+      console.log("Game is starting!");
+      const lobbyDialog = document.getElementById("lobbyDialog");
+      const gameContainer = document.getElementById("gameContainer");
+      
+      if (lobbyDialog && gameContainer) {
+        // Hide lobby dialog
+        lobbyDialog.style.display = "none";
+        
+        // Show game container
+        gameContainer.style.display = "flex";
+        
+        // Redraw the game to ensure proper rendering
+        setTimeout(() => {
+          drawGame();
+        }, 100);
+      }
+    });
   });
-});
+}
+
+function updateLobbyOpponentStatus(gameState: any): void {
+  const opponentStatus = document.getElementById("opponentStatus");
+  const startGameBtn = document.getElementById("startGameBtn") as HTMLButtonElement;
+  
+  if (opponentStatus && startGameBtn && socket) {
+    const currentPlayerId = socket.id;
+    const hasWhitePlayer = gameState.whitePlayer !== null;
+    const hasBlackPlayer = gameState.blackPlayer !== null;
+    const bothPlayersConnected = hasWhitePlayer && hasBlackPlayer;
+    
+    if (bothPlayersConnected) {
+      opponentStatus.textContent = "Opponent joined!";
+      opponentStatus.className = "status-value ready";
+      startGameBtn.disabled = false;
+    } else {
+      opponentStatus.textContent = "Waiting for opponent...";
+      opponentStatus.className = "status-value waiting";
+      startGameBtn.disabled = true;
+    }
+  }
+}
 
 function setupLaunchScreen(): void {
   const launchButton = document.getElementById("launchButton");
@@ -118,6 +180,9 @@ function setupLaunchScreen(): void {
 
   if (launchButton && launchScreen && lobbyDialog) {
     launchButton.addEventListener("click", () => {
+      // Initialize socket connection when user clicks launch
+      initializeSocketConnection();
+      
       // Hide launch screen
       launchScreen.classList.add("hidden");
       
@@ -140,39 +205,43 @@ function setupLobby(): void {
   // Setup leave lobby button
   if (leaveLobbyBtn && lobbyDialog) {
     leaveLobbyBtn.addEventListener("click", () => {
+      // Disconnect from socket if connected
+      if (socket) {
+        socket.disconnect();
+        socket = null;
+      }
+      
       // Hide lobby dialog and return to launch screen
       lobbyDialog.style.display = "none";
       const launchScreen = document.getElementById("launchScreen");
       if (launchScreen) {
         launchScreen.classList.remove("hidden");
       }
+      
+      // Reset lobby status
+      const connectionStatus = document.getElementById("connectionStatus");
+      if (connectionStatus) {
+        connectionStatus.textContent = "Disconnected";
+        connectionStatus.className = "status-value disconnected";
+      }
+      if (opponentStatus) {
+        opponentStatus.textContent = "Waiting for opponent...";
+        opponentStatus.className = "status-value waiting";
+      }
+      if (startGameBtn) {
+        (startGameBtn as HTMLButtonElement).disabled = true;
+      }
     });
   }
 
   // Setup start game button
-  if (startGameBtn && lobbyDialog && gameContainer) {
+  if (startGameBtn && socket) {
     startGameBtn.addEventListener("click", () => {
-      // Hide lobby dialog
-      lobbyDialog.style.display = "none";
-      
-      // Show game container
-      gameContainer.style.display = "flex";
-      
-      // Redraw the game to ensure proper rendering
-      setTimeout(() => {
-        drawGame();
-      }, 100);
+      console.log("Starting game...");
+      // Send start game message to server
+      socket.emit("startGame");
     });
   }
-
-  // Simulate opponent joining after 3 seconds (replace with actual socket logic later)
-  setTimeout(() => {
-    if (opponentStatus && startGameBtn) {
-      opponentStatus.textContent = "Opponent joined!";
-      opponentStatus.className = "status-value ready";
-      (startGameBtn as HTMLButtonElement).disabled = false;
-    }
-  }, 3000);
 }
 
 function initializeChessGame(): void {
@@ -221,7 +290,7 @@ function drawGame(selectPiece: Piece | null = null): void {
   if (canvasManager && canvasManager.isImagesLoaded()) {
     console.log("Drawing game board");
     console.log("Current board state:", gameManager.getBoard());
-    canvasManager.drawBoard(gameManager.getBoard(), selectPiece);
+    canvasManager.drawBoard(gameManager.getBoard(), selectPiece, gameManager.getPlayerColor());
   } else {
     // Retry drawing after a short delay if images aren't loaded yet
     setTimeout(() => drawGame(selectPiece), 100);
@@ -291,11 +360,20 @@ function setupActionButtons(
 }
 
 async function handleDrawRequest(): Promise<void> {
+  if (!socket) {
+    console.error("Socket not connected");
+    return;
+  }
   console.log("Requesting draw...");
   socket.emit("requestDraw");
 }
 
 async function handleConcede(): Promise<void> {
+  if (!socket) {
+    console.error("Socket not connected");
+    return;
+  }
+  
   const result = await ui.pulldownDialog(
     "Are you sure you want to concede this game?",
     "Yes, Concede",

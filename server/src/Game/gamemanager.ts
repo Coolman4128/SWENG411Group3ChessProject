@@ -81,4 +81,36 @@ export class GameManager {
         }
         return null;
     }
+
+    /**
+     * Checks if the game has started (both players assigned and at least one move made)
+     */
+    public isGameStarted(): boolean {
+        return this.gameState.whitePlayer !== null && 
+               this.gameState.blackPlayer !== null && 
+               this.gameState.turnList.length > 0;
+    }
+
+    /**
+     * Removes a player from the game
+     * @param playerId - The ID of the player to remove
+     * @returns The color of the removed player, or null if player not found
+     */
+    public removePlayer(playerId: string): string | null {
+        if (this.gameState.whitePlayer === playerId) {
+            this.gameState.whitePlayer = null;
+            return "white";
+        } else if (this.gameState.blackPlayer === playerId) {
+            this.gameState.blackPlayer = null;
+            return "black";
+        }
+        return null;
+    }
+
+    /**
+     * Checks if a player is assigned to this game
+     */
+    public isPlayerInGame(playerId: string): boolean {
+        return this.gameState.whitePlayer === playerId || this.gameState.blackPlayer === playerId;
+    }
 }

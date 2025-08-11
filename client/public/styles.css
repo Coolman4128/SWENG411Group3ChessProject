@@ -155,6 +155,11 @@ body {
   color: white;
 }
 
+.status-value.disconnected {
+  background: #ef4444;
+  color: white;
+}
+
 .status-value.waiting {
   background: #f59e0b;
   color: white;

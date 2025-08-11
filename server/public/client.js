@@ -3369,10 +3369,12 @@
 
   // src/Game/canvasmanager.ts
   var CanvasManager = class {
+    // Whether to flip the board for black player
     constructor(canvasId) {
       this.squareSize = 80;
       this.pieceImages = /* @__PURE__ */ new Map();
       this.imagesLoaded = false;
+      this.isFlipped = false;
       this.canvas = document.getElementById(canvasId);
       if (!this.canvas) {
         throw new Error(`Canvas with id '${canvasId}' not found.`);
@@ -3412,12 +3414,13 @@
       this.imagesLoaded = true;
       console.log("All images loaded successfully");
     }
-    drawBoard(board, selectPiece) {
+    drawBoard(board, selectPiece, playerColor = null) {
       if (!this.imagesLoaded) {
         console.warn("Images not loaded yet, retrying in 100ms...");
-        setTimeout(() => this.drawBoard(board, selectPiece), 100);
+        setTimeout(() => this.drawBoard(board, selectPiece, playerColor), 100);
         return;
       }
+      this.isFlipped = playerColor === "black";
       this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
       this.ctx.drawImage(this.boardImage, 0, 0, this.canvas.width, this.canvas.height);
       if (selectPiece) {
@@ -3433,9 +3436,8 @@
       const validMoves = selectPiece.getValidMoves(currentPos, board);
       for (const move of validMoves) {
         if (move.x >= 0 && move.x < 8 && move.y >= 0 && move.y < 8) {
-          const x = move.y * this.squareSize;
-          const y = move.x * this.squareSize;
-          this.ctx.drawImage(this.selectorImage, x, y, this.squareSize, this.squareSize);
+          const { canvasX, canvasY } = this.boardToCanvas(move.x, move.y);
+          this.ctx.drawImage(this.selectorImage, canvasX, canvasY, this.squareSize, this.squareSize);
         }
       }
     }
@@ -3455,24 +3457,51 @@
       const imageName = piece.getPiecePNG();
       const image = this.pieceImages.get(imageName);
       if (image) {
-        const x = col * this.squareSize;
-        const y = row * this.squareSize;
-        this.ctx.drawImage(image, x, y, this.squareSize, this.squareSize);
+        const { canvasX, canvasY } = this.boardToCanvas(row, col);
+        this.ctx.drawImage(image, canvasX, canvasY, this.squareSize, this.squareSize);
         if (isSelected) {
           this.ctx.strokeStyle = "yellow";
           this.ctx.lineWidth = 4;
-          this.ctx.strokeRect(x + 2, y + 2, this.squareSize - 4, this.squareSize - 4);
+          this.ctx.strokeRect(canvasX + 2, canvasY + 2, this.squareSize - 4, this.squareSize - 4);
         }
       } else {
         console.warn(`Image not found for piece: ${imageName}`);
+      }
+    }
+    // Helper method to convert board coordinates to canvas coordinates
+    boardToCanvas(row, col) {
+      if (this.isFlipped) {
+        const flippedRow = 7 - row;
+        const flippedCol = 7 - col;
+        return {
+          canvasX: flippedCol * this.squareSize,
+          canvasY: flippedRow * this.squareSize
+        };
+      } else {
+        return {
+          canvasX: col * this.squareSize,
+          canvasY: row * this.squareSize
+        };
+      }
+    }
+    // Helper method to convert canvas coordinates to board coordinates
+    canvasToBoard(canvasX, canvasY) {
+      const col = Math.floor(canvasX / this.squareSize);
+      const row = Math.floor(canvasY / this.squareSize);
+      if (this.isFlipped) {
+        return {
+          row: 7 - row,
+          col: 7 - col
+        };
+      } else {
+        return { row, col };
       }
     }
     getSquareFromPixel(x, y) {
       const rect = this.canvas.getBoundingClientRect();
       const canvasX = x - rect.left;
       const canvasY = y - rect.top;
-      const col = Math.floor(canvasX / this.squareSize);
-      const row = Math.floor(canvasY / this.squareSize);
+      const { row, col } = this.canvasToBoard(canvasX, canvasY);
       if (row >= 0 && row < 8 && col >= 0 && col < 8) {
         return { row, col };
       }
@@ -3487,10 +3516,9 @@
       });
     }
     highlightSquare(row, col, color = "rgba(255, 255, 0, 0.5)") {
-      const x = col * this.squareSize;
-      const y = row * this.squareSize;
+      const { canvasX, canvasY } = this.boardToCanvas(row, col);
       this.ctx.fillStyle = color;
-      this.ctx.fillRect(x, y, this.squareSize, this.squareSize);
+      this.ctx.fillRect(canvasX, canvasY, this.squareSize, this.squareSize);
     }
     isImagesLoaded() {
       return this.imagesLoaded;
@@ -4422,7 +4450,7 @@
   }
 
   // src/main.ts
-  var socket = lookup2();
+  var socket = null;
   var canvasManager;
   var gameManager;
   var ui;
@@ -4438,20 +4466,34 @@
     ui = Chess9000UI.getInstance();
     setupLaunchScreen();
     initializeChessGame();
+  });
+  function initializeSocketConnection() {
+    socket = lookup2();
     socket.on("connect", () => {
       console.log("Connected to server:", socket.id);
       gameManager.setPlayerID(socket.id ?? "");
       gameManager.setSocket(socket);
+      const connectionStatus = document.getElementById("connectionStatus");
+      if (connectionStatus) {
+        connectionStatus.textContent = "Connected";
+        connectionStatus.className = "status-value connected";
+      }
       socket.on("gameState", (data) => {
         console.log("Received game state:", data);
         var dataObject = JSON.parse(data);
         gameManager.loadGameState(dataObject);
+        updateLobbyOpponentStatus(dataObject);
         updateTurnIndicator();
         updateMoveHistory(dataObject.turnList);
         drawGame();
       });
       socket.on("disconnect", () => {
         console.log("Disconnected from server");
+        const connectionStatus2 = document.getElementById("connectionStatus");
+        if (connectionStatus2) {
+          connectionStatus2.textContent = "Disconnected";
+          connectionStatus2.className = "status-value disconnected";
+        }
       });
       socket.on("pieceCaptured", (data) => {
         console.log("Piece captured:", data);
@@ -4492,14 +4534,46 @@
         ui.pulldownDialog(message, "OK", "").then(() => {
         });
       });
+      socket.on("gameStarting", () => {
+        console.log("Game is starting!");
+        const lobbyDialog = document.getElementById("lobbyDialog");
+        const gameContainer = document.getElementById("gameContainer");
+        if (lobbyDialog && gameContainer) {
+          lobbyDialog.style.display = "none";
+          gameContainer.style.display = "flex";
+          setTimeout(() => {
+            drawGame();
+          }, 100);
+        }
+      });
     });
-  });
+  }
+  function updateLobbyOpponentStatus(gameState) {
+    const opponentStatus = document.getElementById("opponentStatus");
+    const startGameBtn = document.getElementById("startGameBtn");
+    if (opponentStatus && startGameBtn && socket) {
+      const currentPlayerId = socket.id;
+      const hasWhitePlayer = gameState.whitePlayer !== null;
+      const hasBlackPlayer = gameState.blackPlayer !== null;
+      const bothPlayersConnected = hasWhitePlayer && hasBlackPlayer;
+      if (bothPlayersConnected) {
+        opponentStatus.textContent = "Opponent joined!";
+        opponentStatus.className = "status-value ready";
+        startGameBtn.disabled = false;
+      } else {
+        opponentStatus.textContent = "Waiting for opponent...";
+        opponentStatus.className = "status-value waiting";
+        startGameBtn.disabled = true;
+      }
+    }
+  }
   function setupLaunchScreen() {
     const launchButton = document.getElementById("launchButton");
     const launchScreen = document.getElementById("launchScreen");
     const lobbyDialog = document.getElementById("lobbyDialog");
     if (launchButton && launchScreen && lobbyDialog) {
       launchButton.addEventListener("click", () => {
+        initializeSocketConnection();
         launchScreen.classList.add("hidden");
         lobbyDialog.style.display = "flex";
         setupLobby();
@@ -4514,29 +4588,35 @@
     const opponentStatus = document.getElementById("opponentStatus");
     if (leaveLobbyBtn && lobbyDialog) {
       leaveLobbyBtn.addEventListener("click", () => {
+        if (socket) {
+          socket.disconnect();
+          socket = null;
+        }
         lobbyDialog.style.display = "none";
         const launchScreen = document.getElementById("launchScreen");
         if (launchScreen) {
           launchScreen.classList.remove("hidden");
         }
+        const connectionStatus = document.getElementById("connectionStatus");
+        if (connectionStatus) {
+          connectionStatus.textContent = "Disconnected";
+          connectionStatus.className = "status-value disconnected";
+        }
+        if (opponentStatus) {
+          opponentStatus.textContent = "Waiting for opponent...";
+          opponentStatus.className = "status-value waiting";
+        }
+        if (startGameBtn) {
+          startGameBtn.disabled = true;
+        }
       });
     }
-    if (startGameBtn && lobbyDialog && gameContainer) {
+    if (startGameBtn && socket) {
       startGameBtn.addEventListener("click", () => {
-        lobbyDialog.style.display = "none";
-        gameContainer.style.display = "flex";
-        setTimeout(() => {
-          drawGame();
-        }, 100);
+        console.log("Starting game...");
+        socket.emit("startGame");
       });
     }
-    setTimeout(() => {
-      if (opponentStatus && startGameBtn) {
-        opponentStatus.textContent = "Opponent joined!";
-        opponentStatus.className = "status-value ready";
-        startGameBtn.disabled = false;
-      }
-    }, 3e3);
   }
   function initializeChessGame() {
     try {
@@ -4569,7 +4649,7 @@
     if (canvasManager && canvasManager.isImagesLoaded()) {
       console.log("Drawing game board");
       console.log("Current board state:", gameManager.getBoard());
-      canvasManager.drawBoard(gameManager.getBoard(), selectPiece);
+      canvasManager.drawBoard(gameManager.getBoard(), selectPiece, gameManager.getPlayerColor());
     } else {
       setTimeout(() => drawGame(selectPiece), 100);
     }
@@ -4608,10 +4688,18 @@
     }
   }
   async function handleDrawRequest() {
+    if (!socket) {
+      console.error("Socket not connected");
+      return;
+    }
     console.log("Requesting draw...");
     socket.emit("requestDraw");
   }
   async function handleConcede() {
+    if (!socket) {
+      console.error("Socket not connected");
+      return;
+    }
     const result = await ui.pulldownDialog(
       "Are you sure you want to concede this game?",
       "Yes, Concede",

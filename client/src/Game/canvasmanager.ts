@@ -9,6 +9,7 @@ export class CanvasManager {
     private selectorImage!: HTMLImageElement;
     private pieceImages: Map<string, HTMLImageElement> = new Map();
     private imagesLoaded: boolean = false;
+    private isFlipped: boolean = false; // Whether to flip the board for black player
 
     constructor(canvasId: string) {
         this.canvas = document.getElementById(canvasId) as HTMLCanvasElement;
@@ -68,12 +69,15 @@ export class CanvasManager {
         console.log('All images loaded successfully');
     }
 
-    public drawBoard(board: Board, selectPiece: Piece | null): void {
+    public drawBoard(board: Board, selectPiece: Piece | null, playerColor: string | null = null): void {
         if (!this.imagesLoaded) {
             console.warn('Images not loaded yet, retrying in 100ms...');
-            setTimeout(() => this.drawBoard(board, selectPiece), 100);
+            setTimeout(() => this.drawBoard(board, selectPiece, playerColor), 100);
             return;
         }
+
+        // Set flip state based on player color
+        this.isFlipped = playerColor === "black";
 
         // Clear the canvas
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -101,11 +105,10 @@ export class CanvasManager {
         for (const move of validMoves) {
             // Check if the move is within board bounds
             if (move.x >= 0 && move.x < 8 && move.y >= 0 && move.y < 8) {
-                const x = move.y * this.squareSize; // Note: move.y maps to canvas x (column)
-                const y = move.x * this.squareSize; // Note: move.x maps to canvas y (row)
+                const { canvasX, canvasY } = this.boardToCanvas(move.x, move.y);
                 
                 // Draw the selector square
-                this.ctx.drawImage(this.selectorImage, x, y, this.squareSize, this.squareSize);
+                this.ctx.drawImage(this.selectorImage, canvasX, canvasY, this.squareSize, this.squareSize);
             }
         }
     }
@@ -129,20 +132,55 @@ export class CanvasManager {
         const image = this.pieceImages.get(imageName);
         
         if (image) {
-            const x = col * this.squareSize;
-            const y = row * this.squareSize;
+            const { canvasX, canvasY } = this.boardToCanvas(row, col);
             
             // Draw the piece image scaled to fit the square
-            this.ctx.drawImage(image, x, y, this.squareSize, this.squareSize);
+            this.ctx.drawImage(image, canvasX, canvasY, this.squareSize, this.squareSize);
             
             // Draw yellow border if piece is selected
             if (isSelected) {
                 this.ctx.strokeStyle = 'yellow';
                 this.ctx.lineWidth = 4;
-                this.ctx.strokeRect(x + 2, y + 2, this.squareSize - 4, this.squareSize - 4);
+                this.ctx.strokeRect(canvasX + 2, canvasY + 2, this.squareSize - 4, this.squareSize - 4);
             }
         } else {
             console.warn(`Image not found for piece: ${imageName}`);
+        }
+    }
+
+    // Helper method to convert board coordinates to canvas coordinates
+    private boardToCanvas(row: number, col: number): { canvasX: number, canvasY: number } {
+        if (this.isFlipped) {
+            // Flip both row and column for black player perspective
+            const flippedRow = 7 - row;
+            const flippedCol = 7 - col;
+            return {
+                canvasX: flippedCol * this.squareSize,
+                canvasY: flippedRow * this.squareSize
+            };
+        } else {
+            // Normal orientation for white player
+            return {
+                canvasX: col * this.squareSize,
+                canvasY: row * this.squareSize
+            };
+        }
+    }
+
+    // Helper method to convert canvas coordinates to board coordinates
+    private canvasToBoard(canvasX: number, canvasY: number): { row: number, col: number } {
+        const col = Math.floor(canvasX / this.squareSize);
+        const row = Math.floor(canvasY / this.squareSize);
+        
+        if (this.isFlipped) {
+            // Flip coordinates back to normal board coordinates for black player
+            return {
+                row: 7 - row,
+                col: 7 - col
+            };
+        } else {
+            // Normal coordinates for white player
+            return { row, col };
         }
     }
 
@@ -151,8 +189,7 @@ export class CanvasManager {
         const canvasX = x - rect.left;
         const canvasY = y - rect.top;
         
-        const col = Math.floor(canvasX / this.squareSize);
-        const row = Math.floor(canvasY / this.squareSize);
+        const { row, col } = this.canvasToBoard(canvasX, canvasY);
         
         if (row >= 0 && row < 8 && col >= 0 && col < 8) {
             return { row, col };
@@ -171,11 +208,10 @@ export class CanvasManager {
     }
 
     public highlightSquare(row: number, col: number, color: string = 'rgba(255, 255, 0, 0.5)'): void {
-        const x = col * this.squareSize;
-        const y = row * this.squareSize;
+        const { canvasX, canvasY } = this.boardToCanvas(row, col);
         
         this.ctx.fillStyle = color;
-        this.ctx.fillRect(x, y, this.squareSize, this.squareSize);
+        this.ctx.fillRect(canvasX, canvasY, this.squareSize, this.squareSize);
     }
 
     public isImagesLoaded(): boolean {

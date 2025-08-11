@@ -68,8 +68,8 @@ io.on("connection", (socket) => {
       gameManager.assignPlayer(socket.id, position);
   }
   
-  // Send the current game state to the newly connected player
-  socket.emit("gameState", gameManager.packageGameStateJSON());
+  // Send the current game state to all players
+  io.emit("gameState", gameManager.packageGameStateJSON());
 
   socket.on("takePiece", (data) => {
     try {
@@ -293,9 +293,55 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on("startGame", () => {
+    try {
+      console.log(`Start game request from ${socket.id}`);
+      
+      // Check if both players are connected
+      const gameState = gameManager.getGameState();
+      if (gameState.whitePlayer && gameState.blackPlayer) {
+        console.log("Both players connected, starting game...");
+        // Broadcast game starting message to all clients
+        io.emit("gameStarting");
+      } else {
+        console.log("Cannot start game - not enough players");
+        socket.emit("gameStartError", { message: "Not enough players connected" });
+      }
+    } catch (error) {
+      console.error("Error handling start game:", error);
+      socket.emit("gameStartError", { message: "Server error occurred" });
+    }
+  });
+
   // Handle player disconnection
   socket.on("disconnect", () => {
-    //TODO handle player disconnection
     console.log(`User disconnected: ${socket.id}`);
+    
+    try {
+      // Check if the disconnecting player is in the game
+      if (gameManager.isPlayerInGame(socket.id)) {
+        const gameStarted = gameManager.isGameStarted();
+        const playerColor = gameManager.removePlayer(socket.id);
+        
+        if (!gameStarted) {
+          // Game hasn't started yet - just remove player and update game state
+          console.log(`Player ${socket.id} (${playerColor}) left before game started`);
+          io.emit("gameState", gameManager.packageGameStateJSON());
+        } else {
+          // Game has started - end the game due to player leaving
+          const opponentId = gameManager.getOpponentId(socket.id);
+          console.log(`Player ${socket.id} (${playerColor}) left during active game`);
+          
+          io.emit("gameEnded", { 
+            reason: "playerLeft", 
+            winner: opponentId,
+            loser: socket.id,
+            message: `${playerColor} player left the game`
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error handling player disconnection:", error);
+    }
   });
 });
