@@ -6,13 +6,23 @@ import { PieceType } from "./Enums/pieces";
 import { GameManager } from "./Game/gamemanager";
 import { Chess9000UI, getPieceImageUrl } from "./UI/chess9000ui";
 
-// Initialize Socket.IO client for localhost on port 3000
-const socket = io("http://localhost:3000");
+// Initialize Socket.IO client - connect to the same host and port as the webpage
+const socket = io();
 
 let canvasManager: CanvasManager;
 let gameManager: GameManager;
 let board: Board;
 let ui: Chess9000UI;
+
+// Test function for the pulldown dialog - can be called from browser console
+(window as any).testDialog = async () => {
+  const result = await ui.pulldownDialog(
+    "This is a test dialog. Choose your response!",
+    "Good Choice",
+    "Bad Choice"
+  );
+  console.log("Dialog result:", result ? "Good" : "Bad");
+};
 
 document.addEventListener("DOMContentLoaded", () => {
   // Initialize the UI
@@ -54,6 +64,49 @@ document.addEventListener("DOMContentLoaded", () => {
       console.log("Piece captured:", data);
       // Update captured pieces UI
       updateCapturedPieces(data);
+    });
+
+    socket.on("drawRequest", async (data) => {
+      console.log("Draw request received:", data);
+      const result = await ui.pulldownDialog(
+        "Your opponent has requested a draw. Do you accept?",
+        "Accept Draw",
+        "Decline"
+      );
+      
+      socket.emit("drawResponse", { accept: result });
+    });
+
+    socket.on("drawDeclined", async () => {
+      console.log("Draw request was declined");
+      const result = await ui.pulldownDialog(
+        "Your draw request was declined. What would you like to do?",
+        "Keep Playing",
+        "Concede"
+      );
+      
+      if (!result) {
+        // Player chose to concede
+        socket.emit("concede");
+      }
+    });
+
+    socket.on("gameEnded", (data) => {
+      console.log("Game ended:", data);
+      let message = "";
+      if (data.reason === "draw") {
+        message = "Game ended in a draw!";
+      } else if (data.reason === "concede") {
+        message = `Game ended - ${data.winner === socket.id ? "You won" : "You lost"} by concession!`;
+      } else if (data.reason === "checkmate") {
+        message = `Game ended - ${data.winner === socket.id ? "You won" : "You lost"} by checkmate!`;
+      } else if (data.reason === "stalemate") {
+        message = "Game ended in a stalemate!";
+      }
+      
+      ui.pulldownDialog(message, "OK", "").then(() => {
+        // Could add logic to return to lobby or restart game
+      });
     });
   });
 });
@@ -130,6 +183,9 @@ function initializeChessGame(): void {
 
     // Initialize UI and reset it to clean state
     ui.resetUI();
+
+    // Setup action buttons with dialog handlers
+    ui.setupActionButtons(handleDrawRequest, handleConcede);
 
     // Add click listener for piece movement
     canvasManager.addClickListener((row, col) => {
@@ -215,6 +271,42 @@ function updateCapturedPieces(captureData: any): void {
       color: piece.color,
       imageUrl: getPieceImageUrl(pieceTypeString, piece.color)
     }, isPlayerCapture);
+  }
+}
+
+function setupActionButtons(
+  onRequestDraw: () => void,
+  onConcede: () => void
+): void {
+  const drawBtn = document.getElementById('requestDrawBtn');
+  const concedeBtn = document.getElementById('concedeBtn');
+  
+  if (drawBtn) {
+    drawBtn.addEventListener('click', onRequestDraw);
+  }
+  
+  if (concedeBtn) {
+    concedeBtn.addEventListener('click', onConcede);
+  }
+}
+
+async function handleDrawRequest(): Promise<void> {
+  console.log("Requesting draw...");
+  socket.emit("requestDraw");
+}
+
+async function handleConcede(): Promise<void> {
+  const result = await ui.pulldownDialog(
+    "Are you sure you want to concede this game?",
+    "Yes, Concede",
+    "Keep Playing"
+  );
+  
+  if (result) {
+    console.log("Game conceded!");
+    socket.emit("concede");
+  } else {
+    console.log("Continuing to play!");
   }
 }
 

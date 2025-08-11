@@ -21,14 +21,140 @@ export interface MoveEntry {
 
 export class Chess9000UI {
   private static instance: Chess9000UI;
+  private dialogContainer: HTMLElement | null = null;
   
-  private constructor() {}
+  private constructor() {
+    this.initializeDialogContainer();
+  }
   
   public static getInstance(): Chess9000UI {
     if (!Chess9000UI.instance) {
       Chess9000UI.instance = new Chess9000UI();
     }
     return Chess9000UI.instance;
+  }
+
+  /**
+   * Initialize the dialog container if it doesn't exist
+   */
+  private initializeDialogContainer(): void {
+    if (!this.dialogContainer) {
+      this.dialogContainer = document.createElement('div');
+      this.dialogContainer.id = 'chess9000-dialog-container';
+      this.dialogContainer.className = 'dialog-container';
+      document.body.appendChild(this.dialogContainer);
+    }
+  }
+
+  /**
+   * Show a slide down dialog with a message and two response options
+   * @param message - The message to display in the dialog
+   * @param goodResponse - Text for the positive/good response button
+   * @param badResponse - Text for the negative/bad response button
+   * @returns Promise<boolean> - true if good response was clicked, false if bad response was clicked
+   */
+  public async pulldownDialog(message: string, goodResponse: string, badResponse: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      this.initializeDialogContainer();
+      
+      // Create dialog structure
+      const dialog = document.createElement('div');
+      dialog.className = 'pulldown-dialog';
+      
+      // Dialog backdrop
+      const backdrop = document.createElement('div');
+      backdrop.className = 'dialog-backdrop';
+      
+      // Dialog content
+      const content = document.createElement('div');
+      content.className = 'dialog-content';
+      
+      // Message
+      const messageElement = document.createElement('div');
+      messageElement.className = 'dialog-message';
+      messageElement.textContent = message;
+      
+      // Button container
+      const buttonContainer = document.createElement('div');
+      buttonContainer.className = 'dialog-buttons';
+      
+      // Good response button
+      const goodButton = document.createElement('button');
+      goodButton.className = 'dialog-button good';
+      goodButton.textContent = goodResponse;
+      
+      // Bad response button
+      const badButton = document.createElement('button');
+      badButton.className = 'dialog-button bad';
+      badButton.textContent = badResponse;
+      
+      // Handle good button click
+      goodButton.addEventListener('click', () => {
+        this.hideDialog(dialog, () => resolve(true));
+      });
+      
+      // Handle bad button click
+      badButton.addEventListener('click', () => {
+        this.hideDialog(dialog, () => resolve(false));
+      });
+      
+      // Handle backdrop click (dismiss as bad response)
+      backdrop.addEventListener('click', () => {
+        this.hideDialog(dialog, () => resolve(false));
+      });
+      
+      // Handle escape key (dismiss as bad response)
+      const handleKeydown = (event: KeyboardEvent) => {
+        if (event.key === 'Escape') {
+          document.removeEventListener('keydown', handleKeydown);
+          this.hideDialog(dialog, () => resolve(false));
+        }
+      };
+      document.addEventListener('keydown', handleKeydown);
+      
+      // Assemble dialog
+      buttonContainer.appendChild(goodButton);
+      buttonContainer.appendChild(badButton);
+      content.appendChild(messageElement);
+      content.appendChild(buttonContainer);
+      dialog.appendChild(backdrop);
+      dialog.appendChild(content);
+      
+      // Add to container and show
+      if (this.dialogContainer) {
+        this.dialogContainer.appendChild(dialog);
+        this.showDialog(dialog);
+      }
+    });
+  }
+
+  /**
+   * Show the dialog with slide down animation
+   */
+  private showDialog(dialog: HTMLElement): void {
+    // Force reflow to ensure initial state is applied
+    dialog.offsetHeight;
+    
+    // Add show class to trigger animation
+    setTimeout(() => {
+      dialog.classList.add('show');
+    }, 10);
+  }
+
+  /**
+   * Hide the dialog with slide up animation
+   */
+  private hideDialog(dialog: HTMLElement, callback: () => void): void {
+    dialog.classList.remove('show');
+    dialog.classList.add('hide');
+    
+    // Wait for animation to complete before removing from DOM
+    setTimeout(() => {
+      if (this.dialogContainer && this.dialogContainer.contains(dialog)) {
+        this.dialogContainer.removeChild(dialog);
+      }
+      callback();
+    }, 300); // Match the CSS transition duration
   }
 
   /**
@@ -221,4 +347,30 @@ ui.addMove({
   whiteMove: 'e4',
   blackMove: 'e5'
 });
+
+// Show pulldown dialog
+const result = await ui.pulldownDialog(
+  "Your opponent has requested a draw. Do you accept?",
+  "Accept",
+  "Decline"
+);
+
+if (result) {
+  console.log("Player accepted the draw");
+} else {
+  console.log("Player declined the draw");
+}
+
+// Another example
+const quitResult = await ui.pulldownDialog(
+  "Are you sure you want to quit the game?",
+  "Yes, Quit",
+  "Cancel"
+);
+
+if (quitResult) {
+  // Handle quit game
+} else {
+  // Continue playing
+}
 */

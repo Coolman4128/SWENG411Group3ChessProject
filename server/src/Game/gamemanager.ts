@@ -69,4 +69,16 @@ export class GameManager {
     public getGameState(): GameState {
         return this.gameState;
     }
+
+    /**
+     * Gets the opponent's player ID given a player ID
+     */
+    public getOpponentId(playerId: string): string | null {
+        if (this.gameState.whitePlayer === playerId) {
+            return this.gameState.blackPlayer;
+        } else if (this.gameState.blackPlayer === playerId) {
+            return this.gameState.whitePlayer;
+        }
+        return null;
+    }
 }

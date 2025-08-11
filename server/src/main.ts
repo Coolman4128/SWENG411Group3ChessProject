@@ -229,6 +229,70 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on("requestDraw", () => {
+    try {
+      console.log(`Draw request from ${socket.id}`);
+      
+      // Get the opponent's socket ID
+      const opponentId = gameManager.getOpponentId(socket.id);
+      if (opponentId) {
+        // Send draw request to opponent
+        io.to(opponentId).emit("drawRequest", { from: socket.id });
+      } else {
+        socket.emit("moveResult", { 
+          success: false, 
+          message: "No opponent found for draw request." 
+        });
+      }
+    } catch (error) {
+      console.error("Error handling draw request:", error);
+      socket.emit("moveResult", { 
+        success: false, 
+        message: "Server error occurred while processing draw request." 
+      });
+    }
+  });
+
+  socket.on("drawResponse", (data) => {
+    try {
+      console.log(`Draw response from ${socket.id}:`, data);
+      
+      if (data.accept) {
+        // Draw accepted - end the game
+        io.emit("gameEnded", { reason: "draw" });
+        console.log("Game ended in draw by agreement");
+      } else {
+        // Draw declined - notify the requesting player
+        const opponentId = gameManager.getOpponentId(socket.id);
+        if (opponentId) {
+          io.to(opponentId).emit("drawDeclined");
+        }
+      }
+    } catch (error) {
+      console.error("Error handling draw response:", error);
+    }
+  });
+
+  socket.on("concede", () => {
+    try {
+      console.log(`Player ${socket.id} conceded`);
+      
+      // Determine winner (the opponent of the conceding player)
+      const opponentId = gameManager.getOpponentId(socket.id);
+      
+      // End the game
+      io.emit("gameEnded", { 
+        reason: "concede", 
+        winner: opponentId,
+        loser: socket.id
+      });
+      
+      console.log(`Game ended - ${opponentId} won by concession`);
+    } catch (error) {
+      console.error("Error handling concede:", error);
+    }
+  });
+
   // Handle player disconnection
   socket.on("disconnect", () => {
     //TODO handle player disconnection

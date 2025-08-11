@@ -4204,12 +4204,102 @@
   // src/UI/chess9000ui.ts
   var Chess9000UI = class _Chess9000UI {
     constructor() {
+      this.dialogContainer = null;
+      this.initializeDialogContainer();
     }
     static getInstance() {
       if (!_Chess9000UI.instance) {
         _Chess9000UI.instance = new _Chess9000UI();
       }
       return _Chess9000UI.instance;
+    }
+    /**
+     * Initialize the dialog container if it doesn't exist
+     */
+    initializeDialogContainer() {
+      if (!this.dialogContainer) {
+        this.dialogContainer = document.createElement("div");
+        this.dialogContainer.id = "chess9000-dialog-container";
+        this.dialogContainer.className = "dialog-container";
+        document.body.appendChild(this.dialogContainer);
+      }
+    }
+    /**
+     * Show a slide down dialog with a message and two response options
+     * @param message - The message to display in the dialog
+     * @param goodResponse - Text for the positive/good response button
+     * @param badResponse - Text for the negative/bad response button
+     * @returns Promise<boolean> - true if good response was clicked, false if bad response was clicked
+     */
+    async pulldownDialog(message, goodResponse, badResponse) {
+      return new Promise((resolve) => {
+        this.initializeDialogContainer();
+        const dialog = document.createElement("div");
+        dialog.className = "pulldown-dialog";
+        const backdrop = document.createElement("div");
+        backdrop.className = "dialog-backdrop";
+        const content = document.createElement("div");
+        content.className = "dialog-content";
+        const messageElement = document.createElement("div");
+        messageElement.className = "dialog-message";
+        messageElement.textContent = message;
+        const buttonContainer = document.createElement("div");
+        buttonContainer.className = "dialog-buttons";
+        const goodButton = document.createElement("button");
+        goodButton.className = "dialog-button good";
+        goodButton.textContent = goodResponse;
+        const badButton = document.createElement("button");
+        badButton.className = "dialog-button bad";
+        badButton.textContent = badResponse;
+        goodButton.addEventListener("click", () => {
+          this.hideDialog(dialog, () => resolve(true));
+        });
+        badButton.addEventListener("click", () => {
+          this.hideDialog(dialog, () => resolve(false));
+        });
+        backdrop.addEventListener("click", () => {
+          this.hideDialog(dialog, () => resolve(false));
+        });
+        const handleKeydown = (event) => {
+          if (event.key === "Escape") {
+            document.removeEventListener("keydown", handleKeydown);
+            this.hideDialog(dialog, () => resolve(false));
+          }
+        };
+        document.addEventListener("keydown", handleKeydown);
+        buttonContainer.appendChild(goodButton);
+        buttonContainer.appendChild(badButton);
+        content.appendChild(messageElement);
+        content.appendChild(buttonContainer);
+        dialog.appendChild(backdrop);
+        dialog.appendChild(content);
+        if (this.dialogContainer) {
+          this.dialogContainer.appendChild(dialog);
+          this.showDialog(dialog);
+        }
+      });
+    }
+    /**
+     * Show the dialog with slide down animation
+     */
+    showDialog(dialog) {
+      dialog.offsetHeight;
+      setTimeout(() => {
+        dialog.classList.add("show");
+      }, 10);
+    }
+    /**
+     * Hide the dialog with slide up animation
+     */
+    hideDialog(dialog, callback) {
+      dialog.classList.remove("show");
+      dialog.classList.add("hide");
+      setTimeout(() => {
+        if (this.dialogContainer && this.dialogContainer.contains(dialog)) {
+          this.dialogContainer.removeChild(dialog);
+        }
+        callback();
+      }, 300);
     }
     /**
      * Update the turn indicator
@@ -4332,10 +4422,18 @@
   }
 
   // src/main.ts
-  var socket = lookup2("http://localhost:3000");
+  var socket = lookup2();
   var canvasManager;
   var gameManager;
   var ui;
+  window.testDialog = async () => {
+    const result = await ui.pulldownDialog(
+      "This is a test dialog. Choose your response!",
+      "Good Choice",
+      "Bad Choice"
+    );
+    console.log("Dialog result:", result ? "Good" : "Bad");
+  };
   document.addEventListener("DOMContentLoaded", () => {
     ui = Chess9000UI.getInstance();
     setupLaunchScreen();
@@ -4358,6 +4456,41 @@
       socket.on("pieceCaptured", (data) => {
         console.log("Piece captured:", data);
         updateCapturedPieces(data);
+      });
+      socket.on("drawRequest", async (data) => {
+        console.log("Draw request received:", data);
+        const result = await ui.pulldownDialog(
+          "Your opponent has requested a draw. Do you accept?",
+          "Accept Draw",
+          "Decline"
+        );
+        socket.emit("drawResponse", { accept: result });
+      });
+      socket.on("drawDeclined", async () => {
+        console.log("Draw request was declined");
+        const result = await ui.pulldownDialog(
+          "Your draw request was declined. What would you like to do?",
+          "Keep Playing",
+          "Concede"
+        );
+        if (!result) {
+          socket.emit("concede");
+        }
+      });
+      socket.on("gameEnded", (data) => {
+        console.log("Game ended:", data);
+        let message = "";
+        if (data.reason === "draw") {
+          message = "Game ended in a draw!";
+        } else if (data.reason === "concede") {
+          message = `Game ended - ${data.winner === socket.id ? "You won" : "You lost"} by concession!`;
+        } else if (data.reason === "checkmate") {
+          message = `Game ended - ${data.winner === socket.id ? "You won" : "You lost"} by checkmate!`;
+        } else if (data.reason === "stalemate") {
+          message = "Game ended in a stalemate!";
+        }
+        ui.pulldownDialog(message, "OK", "").then(() => {
+        });
       });
     });
   });
@@ -4410,6 +4543,7 @@
       gameManager = new GameManager();
       canvasManager = new CanvasManager("chessCanvas");
       ui.resetUI();
+      ui.setupActionButtons(handleDrawRequest, handleConcede);
       canvasManager.addClickListener((row, col) => {
         console.log(`Clicked on square: ${row}, ${col}`);
         const piece = gameManager.getBoard().getPieceAt(row, col);
@@ -4471,6 +4605,23 @@
         color: piece.color,
         imageUrl: getPieceImageUrl(pieceTypeString, piece.color)
       }, isPlayerCapture);
+    }
+  }
+  async function handleDrawRequest() {
+    console.log("Requesting draw...");
+    socket.emit("requestDraw");
+  }
+  async function handleConcede() {
+    const result = await ui.pulldownDialog(
+      "Are you sure you want to concede this game?",
+      "Yes, Concede",
+      "Keep Playing"
+    );
+    if (result) {
+      console.log("Game conceded!");
+      socket.emit("concede");
+    } else {
+      console.log("Continuing to play!");
     }
   }
   function getPieceTypeName(pieceType) {
