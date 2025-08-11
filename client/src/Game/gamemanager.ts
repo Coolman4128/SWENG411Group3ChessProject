@@ -2,6 +2,7 @@ import { Socket } from "socket.io-client";
 import { Board } from "./board";
 import { GameState } from "./gamestate";
 import { Piece } from "./piece";
+import { PieceType } from "../Enums/pieces";
 
 export class GameManager {
     private gameState: GameState;
@@ -12,6 +13,10 @@ export class GameManager {
     private piece: Piece | null = null; // Currently selected piece, if any
 
     private socket: Socket | null = null; // Socket connection, if needed
+
+    // Score tracking
+    private capturedByPlayer: Piece[] = [];
+    private capturedByOpponent: Piece[] = [];
 
     constructor() {
         this.playerID = ""; // This will be set when a player connects
@@ -165,5 +170,43 @@ export class GameManager {
             return this.gameState.whiteTimeRemaining;
         }
         return 0;
+    }
+
+    /**
+     * Add a captured piece to the appropriate list
+     * @param piece - The captured piece
+     * @param capturedByPlayer - true if captured by player, false if captured by opponent
+     */
+    public addCapturedPiece(piece: Piece, capturedByPlayer: boolean): void {
+        if (capturedByPlayer) {
+            this.capturedByPlayer.push(piece);
+        } else {
+            this.capturedByOpponent.push(piece);
+        }
+    }
+
+    /**
+     * Calculate the current score for the player
+     * Score = value of pieces captured by player - value of pieces captured by opponent
+     */
+    public getPlayerScore(): number {
+        const playerCaptureValue = this.capturedByPlayer.reduce((total, piece) => total + piece.getValue(), 0);
+        const opponentCaptureValue = this.capturedByOpponent.reduce((total, piece) => total + piece.getValue(), 0);
+        return playerCaptureValue - opponentCaptureValue;
+    }
+
+    /**
+     * Calculate the current score for the opponent (negative of player score)
+     */
+    public getOpponentScore(): number {
+        return -this.getPlayerScore();
+    }
+
+    /**
+     * Reset captured pieces (for new game)
+     */
+    public resetCapturedPieces(): void {
+        this.capturedByPlayer = [];
+        this.capturedByOpponent = [];
     }
 }

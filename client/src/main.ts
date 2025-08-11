@@ -116,7 +116,7 @@ function initializeSocketConnection(): void {
       }
     });
 
-    socket.on("gameEnded", (data: any) => {
+    socket.on("gameEnded", async (data: any) => {
       console.log("Game ended:", data);
       let message = "";
       if (data.reason === "draw") {
@@ -133,9 +133,17 @@ function initializeSocketConnection(): void {
         message = `Game ended - ${data.winner === socket.id ? "You won" : "You lost"} because the opponent left!`;
       }
       
-      ui.pulldownDialog(message, "OK", "").then(() => {
-        // Could add logic to return to lobby or restart game
-      });
+      const playAgain = await ui.pulldownDialog(message, "Play Again", "Leave");
+      
+      if (playAgain) {
+        // Player wants to play again
+        console.log("Player chose to play again");
+        socket.emit("playAgain");
+      } else {
+        // Player wants to leave
+        console.log("Player chose to leave");
+        socket.emit("leaveGame");
+      }
     });
 
     socket.on("gameStarting", () => {
@@ -155,6 +163,16 @@ function initializeSocketConnection(): void {
           drawGame();
         }, 100);
       }
+    });
+
+    socket.on("returnToLobby", () => {
+      console.log("Returning to lobby for new game");
+      returnToLobby();
+    });
+
+    socket.on("returnToMainMenu", () => {
+      console.log("Returning to main menu");
+      returnToMainMenu();
     });
 
     socket.on("moveResult", (result: any) => {
@@ -271,6 +289,9 @@ function initializeChessGame(): void {
     // Initialize UI and reset it to clean state
     ui.resetUI();
 
+    // Initialize scores
+    updateScores();
+
     // Setup action buttons with dialog handlers
     ui.setupActionButtons(handleDrawRequest, handleConcede);
 
@@ -354,6 +375,18 @@ function updateTimers(): void {
   }
 }
 
+function updateScores(): void {
+  if (ui && gameManager) {
+    const playerScore = gameManager.getPlayerScore();
+    const opponentScore = gameManager.getOpponentScore();
+    
+    ui.updateScores({
+      playerScore: playerScore,
+      opponentScore: opponentScore
+    });
+  }
+}
+
 function updateCapturedPieces(captureData: any): void {
   if (ui && captureData && captureData.piece) {
     const piece = captureData.piece;
@@ -364,12 +397,21 @@ function updateCapturedPieces(captureData: any): void {
     // Determine if this was a player capture or opponent capture
     const isPlayerCapture = piece.color !== gameManager.getPlayerColor();
     
+    // Create a piece object for score tracking
+    const capturedPiece = new Piece(piece.type, piece.color, piece.id);
+    
+    // Add to game manager's captured pieces tracking
+    gameManager.addCapturedPiece(capturedPiece, isPlayerCapture);
+    
     // Add the captured piece to the UI
     ui.addCapturedPiece({
       type: pieceTypeString,
       color: piece.color,
       imageUrl: getPieceImageUrl(pieceTypeString, piece.color)
     }, isPlayerCapture);
+    
+    // Update scores in the UI
+    updateScores();
   }
 }
 
@@ -427,5 +469,54 @@ function getPieceTypeName(pieceType: number): string {
     case PieceType.QUEEN: return 'queen';
     case PieceType.KING: return 'king';
     default: return 'unknown';
+  }
+}
+
+function returnToLobby(): void {
+  const gameContainer = document.getElementById("gameContainer");
+  const lobbyDialog = document.getElementById("lobbyDialog");
+  
+  if (gameContainer && lobbyDialog) {
+    // Hide game container
+    gameContainer.style.display = "none";
+    
+    // Show lobby dialog
+    lobbyDialog.style.display = "flex";
+    
+    // Reset the UI
+    ui.resetUI();
+    
+    // Reset game manager
+    gameManager = new GameManager();
+    if (socket) {
+      gameManager.setPlayerID(socket.id);
+      gameManager.setSocket(socket);
+    }
+    
+    console.log("Returned to lobby, waiting for opponent or game start");
+  }
+}
+
+function returnToMainMenu(): void {
+  const gameContainer = document.getElementById("gameContainer");
+  const lobbyDialog = document.getElementById("lobbyDialog");
+  const launchScreen = document.getElementById("launchScreen");
+  
+  if (gameContainer && lobbyDialog && launchScreen) {
+    // Hide game container and lobby
+    gameContainer.style.display = "none";
+    lobbyDialog.style.display = "none";
+    
+    // Show launch screen
+    launchScreen.classList.remove("hidden");
+    
+    // Reset UI and game state
+    ui.resetUI();
+    gameManager = new GameManager();
+    
+    // Clear socket reference
+    socket = null;
+    
+    console.log("Returned to main menu");
   }
 }

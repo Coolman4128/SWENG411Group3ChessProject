@@ -4176,12 +4176,15 @@
 
   // src/Game/gamemanager.ts
   var GameManager = class {
-    // Socket connection, if needed
     constructor() {
       // "white" or "black" null for spectators
       this.piece = null;
       // Currently selected piece, if any
       this.socket = null;
+      // Socket connection, if needed
+      // Score tracking
+      this.capturedByPlayer = [];
+      this.capturedByOpponent = [];
       this.playerID = "";
       this.playerColor = null;
       this.gameState = new GameState("{}");
@@ -4309,6 +4312,40 @@
         return this.gameState.whiteTimeRemaining;
       }
       return 0;
+    }
+    /**
+     * Add a captured piece to the appropriate list
+     * @param piece - The captured piece
+     * @param capturedByPlayer - true if captured by player, false if captured by opponent
+     */
+    addCapturedPiece(piece, capturedByPlayer) {
+      if (capturedByPlayer) {
+        this.capturedByPlayer.push(piece);
+      } else {
+        this.capturedByOpponent.push(piece);
+      }
+    }
+    /**
+     * Calculate the current score for the player
+     * Score = value of pieces captured by player - value of pieces captured by opponent
+     */
+    getPlayerScore() {
+      const playerCaptureValue = this.capturedByPlayer.reduce((total, piece) => total + piece.getValue(), 0);
+      const opponentCaptureValue = this.capturedByOpponent.reduce((total, piece) => total + piece.getValue(), 0);
+      return playerCaptureValue - opponentCaptureValue;
+    }
+    /**
+     * Calculate the current score for the opponent (negative of player score)
+     */
+    getOpponentScore() {
+      return -this.getPlayerScore();
+    }
+    /**
+     * Reset captured pieces (for new game)
+     */
+    resetCapturedPieces() {
+      this.capturedByPlayer = [];
+      this.capturedByOpponent = [];
     }
   };
 
@@ -4446,8 +4483,32 @@
     updateScores(scores) {
       const playerScore = document.getElementById("playerScore");
       const opponentScore = document.getElementById("opponentScore");
-      if (playerScore) playerScore.textContent = scores.playerScore.toString();
-      if (opponentScore) opponentScore.textContent = scores.opponentScore.toString();
+      if (playerScore) {
+        playerScore.textContent = scores.playerScore.toString();
+        if (scores.playerScore > 0) {
+          playerScore.style.color = "#10b981";
+          playerScore.style.fontWeight = "bold";
+        } else if (scores.playerScore < 0) {
+          playerScore.style.color = "#ef4444";
+          playerScore.style.fontWeight = "bold";
+        } else {
+          playerScore.style.color = "#1e293b";
+          playerScore.style.fontWeight = "bold";
+        }
+      }
+      if (opponentScore) {
+        opponentScore.textContent = scores.opponentScore.toString();
+        if (scores.opponentScore > 0) {
+          opponentScore.style.color = "#10b981";
+          opponentScore.style.fontWeight = "bold";
+        } else if (scores.opponentScore < 0) {
+          opponentScore.style.color = "#ef4444";
+          opponentScore.style.fontWeight = "bold";
+        } else {
+          opponentScore.style.color = "#1e293b";
+          opponentScore.style.fontWeight = "bold";
+        }
+      }
     }
     /**
      * Update the timer display
@@ -4622,7 +4683,7 @@
           socket.emit("concede");
         }
       });
-      socket.on("gameEnded", (data) => {
+      socket.on("gameEnded", async (data) => {
         console.log("Game ended:", data);
         let message = "";
         if (data.reason === "draw") {
@@ -4638,8 +4699,14 @@
         } else if (data.reason === "playerLeft") {
           message = `Game ended - ${data.winner === socket.id ? "You won" : "You lost"} because the opponent left!`;
         }
-        ui.pulldownDialog(message, "OK", "").then(() => {
-        });
+        const playAgain = await ui.pulldownDialog(message, "Play Again", "Leave");
+        if (playAgain) {
+          console.log("Player chose to play again");
+          socket.emit("playAgain");
+        } else {
+          console.log("Player chose to leave");
+          socket.emit("leaveGame");
+        }
       });
       socket.on("gameStarting", () => {
         console.log("Game is starting!");
@@ -4652,6 +4719,14 @@
             drawGame();
           }, 100);
         }
+      });
+      socket.on("returnToLobby", () => {
+        console.log("Returning to lobby for new game");
+        returnToLobby();
+      });
+      socket.on("returnToMainMenu", () => {
+        console.log("Returning to main menu");
+        returnToMainMenu();
       });
       socket.on("moveResult", (result) => {
         console.log("Move result:", result);
@@ -4737,6 +4812,7 @@
       gameManager = new GameManager();
       canvasManager = new CanvasManager("chessCanvas");
       ui.resetUI();
+      updateScores();
       ui.setupActionButtons(handleDrawRequest, handleConcede);
       canvasManager.addClickListener((row, col) => {
         console.log(`Clicked on square: ${row}, ${col}`);
@@ -4799,16 +4875,29 @@
       });
     }
   }
+  function updateScores() {
+    if (ui && gameManager) {
+      const playerScore = gameManager.getPlayerScore();
+      const opponentScore = gameManager.getOpponentScore();
+      ui.updateScores({
+        playerScore,
+        opponentScore
+      });
+    }
+  }
   function updateCapturedPieces(captureData) {
     if (ui && captureData && captureData.piece) {
       const piece = captureData.piece;
       const pieceTypeString = getPieceTypeName(piece.type);
       const isPlayerCapture = piece.color !== gameManager.getPlayerColor();
+      const capturedPiece = new Piece(piece.type, piece.color, piece.id);
+      gameManager.addCapturedPiece(capturedPiece, isPlayerCapture);
       ui.addCapturedPiece({
         type: pieceTypeString,
         color: piece.color,
         imageUrl: getPieceImageUrl(pieceTypeString, piece.color)
       }, isPlayerCapture);
+      updateScores();
     }
   }
   async function handleDrawRequest() {
@@ -4852,6 +4941,35 @@
         return "king";
       default:
         return "unknown";
+    }
+  }
+  function returnToLobby() {
+    const gameContainer = document.getElementById("gameContainer");
+    const lobbyDialog = document.getElementById("lobbyDialog");
+    if (gameContainer && lobbyDialog) {
+      gameContainer.style.display = "none";
+      lobbyDialog.style.display = "flex";
+      ui.resetUI();
+      gameManager = new GameManager();
+      if (socket) {
+        gameManager.setPlayerID(socket.id);
+        gameManager.setSocket(socket);
+      }
+      console.log("Returned to lobby, waiting for opponent or game start");
+    }
+  }
+  function returnToMainMenu() {
+    const gameContainer = document.getElementById("gameContainer");
+    const lobbyDialog = document.getElementById("lobbyDialog");
+    const launchScreen = document.getElementById("launchScreen");
+    if (gameContainer && lobbyDialog && launchScreen) {
+      gameContainer.style.display = "none";
+      lobbyDialog.style.display = "none";
+      launchScreen.classList.remove("hidden");
+      ui.resetUI();
+      gameManager = new GameManager();
+      socket = null;
+      console.log("Returned to main menu");
     }
   }
 })();

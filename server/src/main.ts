@@ -58,6 +58,9 @@ const io = new Server(server, {
 
 const gameManager = new GameManager();
 
+// Track players waiting for a rematch
+let playersWaitingForRematch = new Set<string>();
+
 // Timer interval for checking timeouts and updating game state
 let gameTimer: NodeJS.Timeout | null = null;
 
@@ -357,11 +360,93 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on("playAgain", () => {
+    try {
+      console.log(`Player ${socket.id} wants to play again`);
+      
+      // Add player to the waiting list
+      playersWaitingForRematch.add(socket.id);
+      
+      // Get the opponent's ID
+      const opponentId = gameManager.getOpponentId(socket.id);
+      
+      if (opponentId && playersWaitingForRematch.has(opponentId)) {
+        // Both players want to play again - start a new game
+        console.log("Both players want to play again, starting new game");
+        
+        // Clear the waiting list
+        playersWaitingForRematch.clear();
+        
+        // Reset the game state
+        gameManager.resetGame();
+        
+        // Reassign players to the new game
+        const position1 = Math.random() < 0.5 ? "white" : "black";
+        const position2 = position1 === "white" ? "black" : "white";
+        
+        gameManager.assignPlayer(socket.id, position1);
+        gameManager.assignPlayer(opponentId, position2);
+        
+        // Send both players back to lobby
+        io.to(socket.id).emit("returnToLobby");
+        io.to(opponentId).emit("returnToLobby");
+        
+        // Broadcast updated game state
+        io.emit("gameState", gameManager.packageGameStateJSON());
+        
+        console.log(`New game created - ${socket.id}: ${position1}, ${opponentId}: ${position2}`);
+      } else {
+        // Only this player wants to play again, wait for opponent
+        console.log(`Player ${socket.id} is waiting for opponent to decide`);
+        
+        // Reset game state and add this player back
+        gameManager.resetGame();
+        const position = Math.random() < 0.5 ? "white" : "black";
+        gameManager.assignPlayer(socket.id, position);
+        
+        // Send this player back to lobby
+        socket.emit("returnToLobby");
+        
+        // Broadcast updated game state
+        io.emit("gameState", gameManager.packageGameStateJSON());
+        
+        console.log(`Player ${socket.id} assigned to ${position} and waiting in lobby`);
+      }
+    } catch (error) {
+      console.error("Error handling play again:", error);
+    }
+  });
+
+  socket.on("leaveGame", () => {
+    try {
+      console.log(`Player ${socket.id} is leaving the game`);
+      
+      // Remove player from waiting list if they were there
+      playersWaitingForRematch.delete(socket.id);
+      
+      // Remove player from game if they're in it
+      if (gameManager.isPlayerInGame(socket.id)) {
+        gameManager.removePlayer(socket.id);
+      }
+      
+      // Disconnect the socket and send them to main menu
+      socket.emit("returnToMainMenu");
+      socket.disconnect();
+      
+      console.log(`Player ${socket.id} disconnected and returned to main menu`);
+    } catch (error) {
+      console.error("Error handling leave game:", error);
+    }
+  });
+
   // Handle player disconnection
   socket.on("disconnect", () => {
     console.log(`User disconnected: ${socket.id}`);
     
     try {
+      // Remove from rematch waiting list
+      playersWaitingForRematch.delete(socket.id);
+      
       // Check if the disconnecting player is in the game
       if (gameManager.isPlayerInGame(socket.id)) {
         const gameStarted = gameManager.isGameStarted();

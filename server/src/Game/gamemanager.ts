@@ -120,4 +120,18 @@ export class GameManager {
     public isPlayerInGame(playerId: string): boolean {
         return this.gameState.whitePlayer === playerId || this.gameState.blackPlayer === playerId;
     }
+
+    /**
+     * Reset the game state to start a new game
+     */
+    public resetGame(): void {
+        this.gameState = new GameState();
+    }
+
+    /**
+     * Check if both players are ready for a new game
+     */
+    public areBothPlayersReady(): boolean {
+        return this.gameState.whitePlayer !== null && this.gameState.blackPlayer !== null;
+    }
 }

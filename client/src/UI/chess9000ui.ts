@@ -198,8 +198,35 @@ export class Chess9000UI {
     const playerScore = document.getElementById('playerScore');
     const opponentScore = document.getElementById('opponentScore');
 
-    if (playerScore) playerScore.textContent = scores.playerScore.toString();
-    if (opponentScore) opponentScore.textContent = scores.opponentScore.toString();
+    if (playerScore) {
+      playerScore.textContent = scores.playerScore.toString();
+      // Set color based on score value
+      if (scores.playerScore > 0) {
+        playerScore.style.color = '#10b981'; // Green for positive
+        playerScore.style.fontWeight = 'bold';
+      } else if (scores.playerScore < 0) {
+        playerScore.style.color = '#ef4444'; // Red for negative
+        playerScore.style.fontWeight = 'bold';
+      } else {
+        playerScore.style.color = '#1e293b'; // Default color for zero
+        playerScore.style.fontWeight = 'bold';
+      }
+    }
+
+    if (opponentScore) {
+      opponentScore.textContent = scores.opponentScore.toString();
+      // Set color based on score value
+      if (scores.opponentScore > 0) {
+        opponentScore.style.color = '#10b981'; // Green for positive
+        opponentScore.style.fontWeight = 'bold';
+      } else if (scores.opponentScore < 0) {
+        opponentScore.style.color = '#ef4444'; // Red for negative
+        opponentScore.style.fontWeight = 'bold';
+      } else {
+        opponentScore.style.color = '#1e293b'; // Default color for zero
+        opponentScore.style.fontWeight = 'bold';
+      }
+    }
   }
 
   /**
