@@ -1,10 +1,36 @@
 "use strict";
 (() => {
   var __defProp = Object.defineProperty;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __esm = (fn, res) => function __init() {
+    return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+  };
   var __export = (target, all) => {
     for (var name in all)
       __defProp(target, name, { get: all[name], enumerable: true });
   };
+
+  // src/Enums/pieces.ts
+  var pieces_exports = {};
+  __export(pieces_exports, {
+    PieceType: () => PieceType
+  });
+  var PieceType;
+  var init_pieces = __esm({
+    "src/Enums/pieces.ts"() {
+      "use strict";
+      PieceType = /* @__PURE__ */ ((PieceType2) => {
+        PieceType2[PieceType2["EMPTY"] = 0] = "EMPTY";
+        PieceType2[PieceType2["PAWN"] = 1] = "PAWN";
+        PieceType2[PieceType2["ROOK"] = 2] = "ROOK";
+        PieceType2[PieceType2["KNIGHT"] = 3] = "KNIGHT";
+        PieceType2[PieceType2["BISHOP"] = 4] = "BISHOP";
+        PieceType2[PieceType2["QUEEN"] = 5] = "QUEEN";
+        PieceType2[PieceType2["KING"] = 6] = "KING";
+        return PieceType2;
+      })(PieceType || {});
+    }
+  });
 
   // node_modules/engine.io-parser/build/esm/commons.js
   var PACKET_TYPES = /* @__PURE__ */ Object.create(null);
@@ -3425,7 +3451,7 @@
       this.imagesLoaded = true;
       console.log("All images loaded successfully");
     }
-    drawBoard(board, selectPiece, playerColor = null) {
+    drawBoard(board, selectPiece, playerColor = null, lastMoveFrom = null, lastMoveTo = null, inCheckSquare = null) {
       if (!this.imagesLoaded) {
         console.warn("Images not loaded yet, retrying in 100ms...");
         setTimeout(() => this.drawBoard(board, selectPiece, playerColor), 100);
@@ -3437,6 +3463,13 @@
       this.isFlipped = playerColor === "black";
       this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
       this.ctx.drawImage(this.boardImage, 0, 0, this.canvas.width, this.canvas.height);
+      if (lastMoveFrom && lastMoveTo) {
+        this.highlightSquare(lastMoveFrom.x, lastMoveFrom.y, "rgba(255,215,0,0.35)");
+        this.highlightSquare(lastMoveTo.x, lastMoveTo.y, "rgba(50,205,50,0.45)");
+      }
+      if (inCheckSquare) {
+        this.highlightSquare(inCheckSquare.x, inCheckSquare.y, "rgba(255,0,0,0.5)");
+      }
       if (selectPiece) {
         this.drawValidMoves(board, selectPiece);
       }
@@ -3572,6 +3605,7 @@
   };
 
   // src/Game/piece.ts
+  init_pieces();
   var BoardCords = class {
     constructor(x, y) {
       this.x = x;
@@ -3816,6 +3850,30 @@
           }
         }
       }
+      if (!this.hasMoved) {
+        const row = currentPos.x;
+        const color = this.color;
+        const squaresEmpty = (cols) => cols.every((c) => !board.getPieceAt(row, c));
+        const squareSafe = (col) => !_Piece.isPositionUnderAttackStatic(new BoardCords(row, col), color, board);
+        if (squareSafe(currentPos.y)) {
+          const kingSideRook = board.getPieceAt(row, 7);
+          if (kingSideRook && kingSideRook.getType() === 2 /* ROOK */ && !kingSideRook.getHasMoved()) {
+            if (squaresEmpty([5, 6])) {
+              if (squareSafe(5) && squareSafe(6)) {
+                validMoves.push(new BoardCords(row, 6));
+              }
+            }
+          }
+          const queenSideRook = board.getPieceAt(row, 0);
+          if (queenSideRook && queenSideRook.getType() === 2 /* ROOK */ && !queenSideRook.getHasMoved()) {
+            if (squaresEmpty([1, 2, 3])) {
+              if (squareSafe(3) && squareSafe(2)) {
+                validMoves.push(new BoardCords(row, 2));
+              }
+            }
+          }
+        }
+      }
       return validMoves;
     }
     isInBounds(pos) {
@@ -4050,7 +4108,11 @@
   _Piece.pieceCount = 1;
   var Piece = _Piece;
 
+  // src/main.ts
+  init_pieces();
+
   // src/Game/board.ts
+  init_pieces();
   var Board = class _Board {
     constructor(fromJSON = false) {
       this.squares = [];
@@ -4122,7 +4184,13 @@
     static getBoardFromJSON(jsonData) {
       const board = new _Board(true);
       board.squares = jsonData.squares || [];
-      board.pieces = (jsonData.pieces || []).map((pieceData) => new Piece(pieceData.type, pieceData.color, pieceData.id));
+      board.pieces = (jsonData.pieces || []).map((pieceData) => {
+        const p = new Piece(pieceData.type, pieceData.color, pieceData.id);
+        if (pieceData.hasMoved) {
+          p.setHasMoved(true);
+        }
+        return p;
+      });
       return board;
     }
     getPiecePosition(piece) {
@@ -4146,7 +4214,6 @@
 
   // src/Game/gamestate.ts
   var GameState = class {
-    // Has the first move been made?
     constructor(jsonData, playerID = "") {
       // "white" or "black"
       this.turnList = [];
@@ -4156,6 +4223,11 @@
       this.blackTimeRemaining = 20 * 60 * 1e3;
       // 20 minutes in milliseconds
       this.gameStarted = false;
+      // Has the first move been made?
+      this.lastMoveFrom = null;
+      this.lastMoveTo = null;
+      this.whiteInCheck = false;
+      this.blackInCheck = false;
       const data = jsonData;
       this.whitePlayer = data.whitePlayer || null;
       this.blackPlayer = data.blackPlayer || null;
@@ -4164,6 +4236,10 @@
       this.whiteTimeRemaining = data.whiteTimeRemaining || 20 * 60 * 1e3;
       this.blackTimeRemaining = data.blackTimeRemaining || 20 * 60 * 1e3;
       this.gameStarted = data.gameStarted || false;
+      this.lastMoveFrom = data.lastMoveFrom || null;
+      this.lastMoveTo = data.lastMoveTo || null;
+      this.whiteInCheck = data.whiteInCheck || false;
+      this.blackInCheck = data.blackInCheck || false;
       if (data.board === void 0) {
         console.log("Board is undefined, creating new board");
         this.board = new Board();
@@ -4276,6 +4352,9 @@
     getBoard() {
       return this.gameState.board;
     }
+    getGameStateRaw() {
+      return this.gameState;
+    }
     getIsTurn() {
       if (this.playerColor === null) {
         return false;
@@ -4354,6 +4433,50 @@
     constructor() {
       this.dialogContainer = null;
       this.initializeDialogContainer();
+    }
+    /**
+     * Show a dedicated promotion selection dialog returning chosen piece type string.
+     */
+    async promotionDialog(color) {
+      return new Promise((resolve) => {
+        this.initializeDialogContainer();
+        const dialog = document.createElement("div");
+        dialog.className = "pulldown-dialog";
+        const backdrop = document.createElement("div");
+        backdrop.className = "dialog-backdrop";
+        const content = document.createElement("div");
+        content.className = "dialog-content";
+        const messageElement = document.createElement("div");
+        messageElement.className = "dialog-message";
+        messageElement.textContent = "Promote pawn to:";
+        const buttons = document.createElement("div");
+        buttons.className = "dialog-buttons promotion-buttons";
+        const options = [
+          { key: "queen", label: "Queen" },
+          { key: "rook", label: "Rook" },
+          { key: "bishop", label: "Bishop" },
+          { key: "knight", label: "Knight" }
+        ];
+        const finish = (choice) => {
+          this.hideDialog(dialog, () => resolve(choice));
+        };
+        options.forEach((opt) => {
+          const btn = document.createElement("button");
+          btn.className = "dialog-button good";
+          btn.textContent = opt.label;
+          btn.addEventListener("click", () => finish(opt.key));
+          buttons.appendChild(btn);
+        });
+        backdrop.addEventListener("click", () => finish("queen"));
+        content.appendChild(messageElement);
+        content.appendChild(buttons);
+        dialog.appendChild(backdrop);
+        dialog.appendChild(content);
+        if (this.dialogContainer) {
+          this.dialogContainer.appendChild(dialog);
+          this.showDialog(dialog);
+        }
+      });
     }
     static getInstance() {
       if (!_Chess9000UI.instance) {
@@ -4663,6 +4786,27 @@
         console.log("Piece captured:", data);
         updateCapturedPieces(data);
       });
+      socket.on("promote", async (data) => {
+        try {
+          if (!data || !data.pieceId) return;
+          const { pieceId, color, choices } = data;
+          if (color !== gameManager.getPlayerColor()) {
+            return;
+          }
+          const selection = await ui.promotionDialog(color);
+          const { PieceType: PieceType2 } = await Promise.resolve().then(() => (init_pieces(), pieces_exports));
+          const mapping = { queen: PieceType2.QUEEN, rook: PieceType2.ROOK, bishop: PieceType2.BISHOP, knight: PieceType2.KNIGHT };
+          const newType = mapping[selection] ?? PieceType2.QUEEN;
+          if (!choices.includes(newType)) {
+            const fallback = choices.find((c) => c === PieceType2.QUEEN) ?? choices[0];
+            socket.emit("promotionChoice", { pieceId, newType: fallback });
+          } else {
+            socket.emit("promotionChoice", { pieceId, newType });
+          }
+        } catch (e) {
+          console.error("Error handling promote event", e);
+        }
+      });
       socket.on("drawRequest", async (data) => {
         console.log("Draw request received:", data);
         const result = await ui.pulldownDialog(
@@ -4837,12 +4981,38 @@
   }
   function drawGame(selectPiece = null) {
     if (canvasManager && canvasManager.isImagesLoaded()) {
-      console.log("Drawing game board");
-      console.log("Current board state:", gameManager.getBoard());
-      canvasManager.drawBoard(gameManager.getBoard(), selectPiece, gameManager.getPlayerColor());
+      const gs = gameManager.getGameStateRaw() ?? null;
+      let lastFrom = gs?.lastMoveFrom ? { x: gs.lastMoveFrom.x, y: gs.lastMoveFrom.y } : null;
+      let lastTo = gs?.lastMoveTo ? { x: gs.lastMoveTo.x, y: gs.lastMoveTo.y } : null;
+      let inCheckSquare = null;
+      if (gs) {
+        const board = gameManager.getBoard();
+        const whiteInCheck = gs.whiteInCheck;
+        const blackInCheck = gs.blackInCheck;
+        if (whiteInCheck) {
+          const kingPos = findKingPosition("white", board);
+          if (kingPos) inCheckSquare = { x: kingPos.x, y: kingPos.y };
+        }
+        if (blackInCheck) {
+          const kingPos = findKingPosition("black", board);
+          if (kingPos) inCheckSquare = { x: kingPos.x, y: kingPos.y };
+        }
+      }
+      canvasManager.drawBoard(gameManager.getBoard(), selectPiece, gameManager.getPlayerColor(), lastFrom, lastTo, inCheckSquare);
     } else {
       setTimeout(() => drawGame(selectPiece), 100);
     }
+  }
+  function findKingPosition(color, board) {
+    for (let x = 0; x < 8; x++) {
+      for (let y = 0; y < 8; y++) {
+        const piece = board.getPieceAt(x, y);
+        if (piece && piece.getColor() === color && piece.getType() === 6 /* KING */) {
+          return new BoardCords(x, y);
+        }
+      }
+    }
+    return null;
   }
   function updateTurnIndicator() {
     if (ui && gameManager) {

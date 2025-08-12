@@ -128,6 +128,10 @@ export class GameManager {
         return this.gameState.board;
     }
 
+    public getGameStateRaw(): any {
+        return this.gameState; // Used for UI features like last move highlighting
+    }
+
     public getIsTurn(): boolean {
         if (this.playerColor === null) {
             return false; // Spectators cannot make moves

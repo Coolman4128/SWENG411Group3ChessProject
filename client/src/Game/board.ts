@@ -91,7 +91,15 @@ export class Board {
     public static getBoardFromJSON(jsonData: any): Board {
         const board = new Board(true);
         board.squares = jsonData.squares || [];
-        board.pieces = (jsonData.pieces || []).map((pieceData: any) => new Piece(pieceData.type, pieceData.color, pieceData.id));
+        // Recreate pieces from JSON, preserving hasMoved so client-side move generation is accurate
+        board.pieces = (jsonData.pieces || []).map((pieceData: any) => {
+            const p = new Piece(pieceData.type, pieceData.color, pieceData.id);
+            if (pieceData.hasMoved) {
+                // Ensure pawns (and other pieces) no longer expose first-move only options like double advance
+                p.setHasMoved(true);
+            }
+            return p;
+        });
         return board;
     }
 

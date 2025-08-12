@@ -272,6 +272,46 @@ io.on("connection", (socket) => {
     }
   });
 
+  // Handle promotion choice from client
+  socket.on("promotionChoice", (data) => {
+    try {
+      const { pieceId, newType } = data || {};
+      if (pieceId === undefined || newType === undefined) {
+        socket.emit("moveResult", { success: false, message: "Invalid promotion data." });
+        return;
+      }
+      // Map incoming number to PieceType (trust client minimal, but validate range)
+      const PieceType = require('./Enums/pieces').PieceType;
+      if (![PieceType.QUEEN, PieceType.ROOK, PieceType.BISHOP, PieceType.KNIGHT].includes(newType)) {
+        socket.emit("moveResult", { success: false, message: "Invalid promotion piece type." });
+        return;
+      }
+      const result = (gameManager as any).gameState.finalizePromotion(
+        socket.id,
+        pieceId,
+        newType,
+        (event: string, eventData: any) => {
+          if (event === "gameState") {
+            io.emit(event, eventData);
+          } else {
+            io.emit(event, eventData);
+          }
+        }
+      );
+      socket.emit("moveResult", result);
+      if (result.isCheckmate) {
+        stopGameTimer();
+        io.emit("gameEnded", { reason: "checkmate", winner: result.message });
+      } else if (result.isDraw) {
+        stopGameTimer();
+        io.emit("gameEnded", { reason: "stalemate" });
+      }
+    } catch (err) {
+      console.error("Error finalizing promotion", err);
+      socket.emit("moveResult", { success: false, message: "Server error during promotion." });
+    }
+  });
+
   socket.on("requestDraw", () => {
     try {
       console.log(`Draw request from ${socket.id}`);

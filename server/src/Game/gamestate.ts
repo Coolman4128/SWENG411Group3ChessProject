@@ -9,6 +9,7 @@ export interface MoveResult {
     isCheckmate?: boolean;
     isDraw?: boolean;
     isCheck?: boolean;
+    promotionRequired?: boolean; // Indicates the move requires a pawn promotion choice
 }
 
 export class GameState {
@@ -26,6 +27,20 @@ export class GameState {
     public blackTimeRemaining: number = 20 * 60 * 1000; // 20 minutes in milliseconds
     private turnStartTime: number = 0; // When the current turn started
     private gameStarted: boolean = false; // Has the first move been made?
+    // Track last move for client-side highlighting
+    public lastMoveFrom: { x: number; y: number } | null = null;
+    public lastMoveTo: { x: number; y: number } | null = null;
+
+    // Cached check status (updated each move)
+    public whiteInCheck: boolean = false;
+    public blackInCheck: boolean = false;
+
+    // Pending promotion details (if a pawn has reached last rank and awaits selection)
+    private pendingPromotion: {
+        pieceId: number;
+        fromX: number; fromY: number; toX: number; toY: number;
+        capturedPieceId?: number;
+    } | null = null;
 
     constructor() {
         this.whitePlayer = null;
@@ -52,14 +67,43 @@ export class GameState {
         toY: number,
         eventEmitter?: (event: string, data: any) => void
     ): MoveResult {
+        // If a promotion is pending, block new moves until it's resolved
+        if (this.pendingPromotion) {
+            return { success: false, message: "Pending promotion must be completed before making another move." };
+        }
         // 1. Validate the move is legit
         const validationResult = this.validateMove(playerId, fromX, fromY, toX, toY);
         if (!validationResult.success) {
             return validationResult;
         }
 
-        const piece = this.board.getPieceAt(fromX, fromY)!;
+    const piece = this.board.getPieceAt(fromX, fromY)!;
         const targetPiece = this.board.getPieceAt(toX, toY);
+
+        // Detect castling before normal move application (king moving two squares horizontally)
+        let castlingPerformed: "king" | "queen" | null = null;
+        if (piece.getType() === PieceType.KING && Math.abs(toY - fromY) === 2 && fromX === toX) {
+            // Determine side
+            if (toY === 6) {
+                // Kingside castle: move rook from y=7 to y=5
+                const rook = this.board.getPieceAt(fromX, 7);
+                if (rook && rook.getType() === PieceType.ROOK) {
+                    this.board.squares[fromX][5] = rook.id;
+                    this.board.squares[fromX][7] = 0;
+                    rook.setHasMoved(true);
+                    castlingPerformed = "king";
+                }
+            } else if (toY === 2) {
+                // Queenside castle: move rook from y=0 to y=3
+                const rook = this.board.getPieceAt(fromX, 0);
+                if (rook && rook.getType() === PieceType.ROOK) {
+                    this.board.squares[fromX][3] = rook.id;
+                    this.board.squares[fromX][0] = 0;
+                    rook.setHasMoved(true);
+                    castlingPerformed = "queen";
+                }
+            }
+        }
 
         // 2. Move the piece and update gamestate
         // If there's a piece to capture, remove it from the pieces array
@@ -74,9 +118,33 @@ export class GameState {
         this.board.squares[fromX][fromY] = 0;
         piece.setHasMoved(true);
 
-        // Record the move in algebraic notation
-        const moveNotation = this.generateMoveNotation(piece, fromX, fromY, toX, toY, targetPiece);
-        this.turnList.push([moveNotation]);
+    // Track last move squares
+    this.lastMoveFrom = { x: fromX, y: fromY };
+    this.lastMoveTo = { x: toX, y: toY };
+
+    // Check for pawn promotion BEFORE finalizing turn logic
+    const isPawn = piece.getType() === PieceType.PAWN;
+    const promotionRankReached = (piece.getColor() === "white" && toX === 0) || (piece.getColor() === "black" && toX === 7);
+    if (isPawn && promotionRankReached) {
+            // Store pending promotion data
+            this.pendingPromotion = { pieceId: piece.id, fromX, fromY, toX, toY, capturedPieceId: targetPiece?.id };
+
+            // Emit promote event so client can request choice
+            if (eventEmitter) {
+                eventEmitter("promote", {
+                    pieceId: piece.id,
+                    color: piece.getColor(),
+                    position: { x: toX, y: toY },
+                    choices: [PieceType.QUEEN, PieceType.ROOK, PieceType.BISHOP, PieceType.KNIGHT]
+                });
+            }
+            // Do not push notation or change turn yet
+            return { success: true, promotionRequired: true };
+    }
+
+    // Record the move in algebraic notation (we might append + or # later)
+    let moveNotation = castlingPerformed === "king" ? "O-O" : castlingPerformed === "queen" ? "O-O-O" : this.generateMoveNotation(piece, fromX, fromY, toX, toY, targetPiece);
+    this.turnList.push([moveNotation]);
 
         // Handle timer logic
         if (!this.gameStarted) {
@@ -89,8 +157,11 @@ export class GameState {
             this.turnStartTime = Date.now();
         }
 
-        // Change turn
-        this.currentTurn = this.currentTurn === "white" ? "black" : "white";
+    // Determine opponent color BEFORE flipping turn (needed for check detection on opponent)
+    const opponentColor = this.currentTurn === "white" ? "black" : "white";
+
+    // Change turn
+    this.currentTurn = opponentColor;
 
         // 3. Check if a piece was captured and emit event
         if (targetPiece && eventEmitter) {
@@ -103,23 +174,48 @@ export class GameState {
             });
         }
 
-        // 4. Check for checkmate
+        // Update check status for both colors
+        this.whiteInCheck = Piece.isPlayerInCheck("white", this.board);
+        this.blackInCheck = Piece.isPlayerInCheck("black", this.board);
+
+        // Determine if opponent is now in check (the move just played against opponentColor)
+        const opponentInCheck = opponentColor === "white" ? this.whiteInCheck : this.blackInCheck;
+
+        // If the move delivered check, append '+' to previous notation (or '#' if checkmate below)
+        if (opponentInCheck) {
+            const lastIdx = this.turnList.length - 1;
+            if (lastIdx >= 0) {
+                this.turnList[lastIdx][0] = this.turnList[lastIdx][0] + "+"; // temporary, may change to # if mate
+            }
+        }
+
+        // 4. Check for checkmate (on opponent just put in turn position)
         const isCheckmate = this.isPlayerInCheckmate(this.currentTurn);
         if (isCheckmate) {
-            // TODO: Handle ending the game with a winner
-            console.log(`Checkmate! ${this.currentTurn === "white" ? "Black" : "White"} wins!`);
+            // Replace '+' with '#' if previously added or just append
+            const lastIdx = this.turnList.length - 1;
+            if (lastIdx >= 0) {
+                this.turnList[lastIdx][0] = this.turnList[lastIdx][0].replace(/\+?$/, "#");
+            }
+            console.log(`Checkmate! ${opponentColor === "white" ? "White" : "Black"} wins!`);
+            // Emit updated state before returning
+            if (eventEmitter) {
+                eventEmitter("gameState", this.toJSON());
+            }
             return {
                 success: true,
                 isCheckmate: true,
-                message: `Checkmate! ${this.currentTurn === "white" ? "Black" : "White"} wins!`
+                message: `Checkmate! ${opponentColor === "white" ? "White" : "Black"} wins!`
             };
         }
 
         // 5. Check for draw (stalemate)
         const isDraw = this.isStalemate(this.currentTurn);
         if (isDraw) {
-            // TODO: Handle drawing the game
             console.log("Stalemate! The game is a draw.");
+            if (eventEmitter) {
+                eventEmitter("gameState", this.toJSON());
+            }
             return {
                 success: true,
                 isDraw: true,
@@ -132,15 +228,106 @@ export class GameState {
             eventEmitter("gameState", this.toJSON());
         }
 
-        // Check if the current player is in check (for notification)
-        const isCheck = Piece.isPlayerInCheck(this.currentTurn, this.board);
-
         return {
             success: true,
             capturedPiece: targetPiece || undefined,
-            isCheck: isCheck,
-            message: isCheck ? `${this.currentTurn} is in check!` : undefined
+            isCheck: opponentInCheck,
+            message: opponentInCheck ? `${this.currentTurn} is in check!` : undefined
         };
+    }
+
+    /**
+     * Finalizes a pending pawn promotion by changing the piece type and then executing
+     * the remaining post-move logic (notation, turn change, check/mate detection, emit state)
+     */
+    public finalizePromotion(playerId: string, pieceId: number, newType: PieceType, eventEmitter?: (event: string, data: any) => void): MoveResult {
+        if (!this.pendingPromotion) {
+            return { success: false, message: "No promotion is pending." };
+        }
+        const { pieceId: pendingId, fromX, fromY, toX, toY, capturedPieceId } = this.pendingPromotion;
+        if (pendingId !== pieceId) {
+            return { success: false, message: "Piece does not match pending promotion." };
+        }
+        // Validate player color
+        const playerColor = this.getPlayerColor(playerId);
+        if (!playerColor) {
+            return { success: false, message: "Player not in game." };
+        }
+        const piece = this.board.getPieceAt(toX, toY);
+        if (!piece) {
+            return { success: false, message: "Promoting piece not found." };
+        }
+        if (piece.getColor() !== playerColor) {
+            return { success: false, message: "Cannot promote opponent's piece." };
+        }
+        if (piece.getType() !== PieceType.PAWN) {
+            return { success: false, message: "Only pawns can be promoted." };
+        }
+        if (![PieceType.QUEEN, PieceType.ROOK, PieceType.BISHOP, PieceType.KNIGHT].includes(newType)) {
+            return { success: false, message: "Invalid promotion type." };
+        }
+
+        // Set new type on piece
+        (piece as any).setTypeForPromotion(newType);
+
+        // Generate notation now with promotion suffix
+        const capturedPiece = capturedPieceId ? this.board.getPieceById(capturedPieceId) : null;
+        let moveNotation = this.generateMoveNotationPromoted(piece, fromX, fromY, toX, toY, capturedPiece, newType);
+        this.turnList.push([moveNotation]);
+
+        // Handle timer logic (same as in movePiece for first move vs subsequent)
+        if (!this.gameStarted) {
+            this.gameStarted = true;
+            this.turnStartTime = Date.now();
+        } else {
+            this.updateCurrentPlayerTime();
+            this.turnStartTime = Date.now();
+        }
+
+        // Opponent color BEFORE turn flip
+        const opponentColor = this.currentTurn === "white" ? "black" : "white";
+        // Change turn
+        this.currentTurn = opponentColor;
+
+        // Update check status
+        this.whiteInCheck = Piece.isPlayerInCheck("white", this.board);
+        this.blackInCheck = Piece.isPlayerInCheck("black", this.board);
+
+        const opponentInCheck = opponentColor === "white" ? this.whiteInCheck : this.blackInCheck;
+        if (opponentInCheck) {
+            const lastIdx = this.turnList.length - 1;
+            if (lastIdx >= 0) {
+                this.turnList[lastIdx][0] = this.turnList[lastIdx][0] + "+";
+            }
+        }
+
+        const isCheckmate = this.isPlayerInCheckmate(this.currentTurn);
+        if (isCheckmate) {
+            const lastIdx = this.turnList.length - 1;
+            if (lastIdx >= 0) {
+                this.turnList[lastIdx][0] = this.turnList[lastIdx][0].replace(/\+?$/, "#");
+            }
+            if (eventEmitter) {
+                eventEmitter("gameState", this.toJSON());
+            }
+            this.pendingPromotion = null; // clear
+            return { success: true, isCheckmate: true, message: `Checkmate! ${opponentColor === "white" ? "White" : "Black"} wins!` };
+        }
+
+        const isDraw = this.isStalemate(this.currentTurn);
+        if (isDraw) {
+            if (eventEmitter) {
+                eventEmitter("gameState", this.toJSON());
+            }
+            this.pendingPromotion = null;
+            return { success: true, isDraw: true, message: "Stalemate! The game is a draw." };
+        }
+
+        if (eventEmitter) {
+            eventEmitter("gameState", this.toJSON());
+        }
+        this.pendingPromotion = null;
+        return { success: true, isCheck: opponentInCheck, message: opponentInCheck ? `${this.currentTurn} is in check!` : undefined };
     }
 
     /**
@@ -312,6 +499,20 @@ export class GameState {
         return notation;
     }
 
+    private generateMoveNotationPromoted(piece: Piece, fromX: number, fromY: number, toX: number, toY: number, capturedPiece: Piece | null, promotionType: PieceType): string {
+        // Temporarily treat as pawn for original capture/file logic BEFORE promotion piece letter
+        let baseNotation = this.generateMoveNotation(Object.assign(Object.create(Object.getPrototypeOf(piece)), piece, { getType: () => PieceType.PAWN }) as Piece, fromX, fromY, toX, toY, capturedPiece);
+        // Append =<PieceLetter>
+        let pieceLetter = "";
+        switch (promotionType) {
+            case PieceType.QUEEN: pieceLetter = "Q"; break;
+            case PieceType.ROOK: pieceLetter = "R"; break;
+            case PieceType.BISHOP: pieceLetter = "B"; break;
+            case PieceType.KNIGHT: pieceLetter = "N"; break;
+        }
+        return `${baseNotation}=${pieceLetter}`;
+    }
+
     /**
      * Updates the time remaining for the current player
      */
@@ -374,6 +575,10 @@ export class GameState {
             whiteTimeRemaining: currentTimes.whiteTime,
             blackTimeRemaining: currentTimes.blackTime,
             gameStarted: this.gameStarted,
+            lastMoveFrom: this.lastMoveFrom,
+            lastMoveTo: this.lastMoveTo,
+            whiteInCheck: this.whiteInCheck,
+            blackInCheck: this.blackInCheck,
             board: {
                 squares: this.board.squares,
                 pieces: this.board.pieces.map(piece => ({

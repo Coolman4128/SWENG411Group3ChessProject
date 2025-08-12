@@ -279,6 +279,42 @@ export class Piece {
             }
         }
 
+        // Castling logic (client-side for highlighting available moves)
+        // Conditions (simplified, relies on existing attack detection via filtering later):
+        // 1. King and chosen rook have not moved
+        // 2. Squares between king and rook are empty
+        // 3. King is not currently in check and does not pass through or land on attacked squares
+        if (!this.hasMoved) {
+            const row = currentPos.x; // Row of king (7 for white, 0 for black at start)
+            const color = this.color;
+            // Helper to test if squares are clear
+            const squaresEmpty = (cols: number[]): boolean => cols.every(c => !board.getPieceAt(row, c));
+            const squareSafe = (col: number): boolean => !Piece.isPositionUnderAttackStatic(new BoardCords(row, col), color, board);
+            // Ensure current square not under attack
+            if (squareSafe(currentPos.y)) {
+                // Kingside castle
+                // Rook expected at y = 7, king path through y=5,y=6
+                const kingSideRook = board.getPieceAt(row, 7);
+                if (kingSideRook && kingSideRook.getType() === PieceType.ROOK && !kingSideRook.getHasMoved()) {
+                    if (squaresEmpty([5,6])) {
+                        if (squareSafe(5) && squareSafe(6)) {
+                            validMoves.push(new BoardCords(row, 6));
+                        }
+                    }
+                }
+                // Queenside castle
+                // Rook expected at y = 0, king path through y=3,y=2 (square y=1 also must be empty)
+                const queenSideRook = board.getPieceAt(row, 0);
+                if (queenSideRook && queenSideRook.getType() === PieceType.ROOK && !queenSideRook.getHasMoved()) {
+                    if (squaresEmpty([1,2,3])) {
+                        if (squareSafe(3) && squareSafe(2)) {
+                            validMoves.push(new BoardCords(row, 2));
+                        }
+                    }
+                }
+            }
+        }
+
         return validMoves;
     }
 

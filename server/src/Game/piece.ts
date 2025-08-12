@@ -87,6 +87,17 @@ export class Piece{
         return this.type;
     }
 
+    // ONLY for pawn promotion - not exposed broadly in gameplay logic
+    public setTypeForPromotion(newType: PieceType): void {
+        if (this.type !== PieceType.PAWN) {
+            throw new Error("Only pawns can be promoted");
+        }
+        if (![PieceType.QUEEN, PieceType.ROOK, PieceType.BISHOP, PieceType.KNIGHT].includes(newType)) {
+            throw new Error("Invalid promotion type");
+        }
+        this.type = newType;
+    }
+
     public getColor(): string {
         return this.color;
     }
@@ -276,6 +287,30 @@ export class Piece{
                 if (!pieceAtPos || pieceAtPos.getColor() !== this.color) {
                     // Don't add moves that would put king in check (will be filtered later)
                     validMoves.push(newPos);
+                }
+            }
+        }
+
+        // Castling logic (server-side)
+        if (!this.hasMoved) {
+            const row = currentPos.x;
+            const color = this.color;
+            const squaresEmpty = (cols: number[]): boolean => cols.every(c => !board.getPieceAt(row, c));
+            const squareSafe = (col: number): boolean => !Piece.isPositionUnderAttackStatic(new BoardCords(row, col), color, board);
+            if (squareSafe(currentPos.y)) {
+                // Kingside castle
+                const kingSideRook = board.getPieceAt(row, 7);
+                if (kingSideRook && kingSideRook.getType() === PieceType.ROOK && !kingSideRook.getHasMoved()) {
+                    if (squaresEmpty([5,6]) && squareSafe(5) && squareSafe(6)) {
+                        validMoves.push(new BoardCords(row, 6));
+                    }
+                }
+                // Queenside castle
+                const queenSideRook = board.getPieceAt(row, 0);
+                if (queenSideRook && queenSideRook.getType() === PieceType.ROOK && !queenSideRook.getHasMoved()) {
+                    if (squaresEmpty([1,2,3]) && squareSafe(3) && squareSafe(2)) {
+                        validMoves.push(new BoardCords(row, 2));
+                    }
                 }
             }
         }

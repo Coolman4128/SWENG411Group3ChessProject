@@ -1,7 +1,7 @@
 import { io } from "socket.io-client";
 import { CanvasManager } from "./Game/canvasmanager";
 import { Board } from "./Game/board";
-import { Piece } from "./Game/piece";
+import { Piece, BoardCords } from "./Game/piece";
 import { PieceType } from "./Enums/pieces";
 import { GameManager } from "./Game/gamemanager";
 import { Chess9000UI, getPieceImageUrl } from "./UI/chess9000ui";
@@ -72,7 +72,7 @@ function initializeSocketConnection(): void {
       updateTimers();
       
       // Preserve the currently selected piece when redrawing
-      drawGame(gameManager.getSelectedPiece());
+  drawGame(gameManager.getSelectedPiece());
     });
 
     socket.on("disconnect", () => {
@@ -89,6 +89,32 @@ function initializeSocketConnection(): void {
       console.log("Piece captured:", data);
       // Update captured pieces UI
       updateCapturedPieces(data);
+    });
+
+    socket.on("promote", async (data: any) => {
+      // Only prompt the player who owns the pawn
+      try {
+        if (!data || !data.pieceId) return;
+        const { pieceId, color, choices } = data;
+        if (color !== gameManager.getPlayerColor()) {
+          // Not this player's pawn; just wait for opponent's choice
+          return;
+        }
+        const selection = await ui.promotionDialog(color);
+        // Map selection to PieceType numeric (import locally to avoid circular refs at runtime)
+        const { PieceType } = await import('./Enums/pieces');
+        const mapping: any = { queen: PieceType.QUEEN, rook: PieceType.ROOK, bishop: PieceType.BISHOP, knight: PieceType.KNIGHT };
+        const newType = mapping[selection] ?? PieceType.QUEEN;
+        if (!choices.includes(newType)) {
+          // fallback if server choices restricted
+            const fallback = choices.find((c:number)=> c === PieceType.QUEEN) ?? choices[0];
+            socket.emit('promotionChoice', { pieceId, newType: fallback });
+        } else {
+          socket.emit('promotionChoice', { pieceId, newType });
+        }
+      } catch (e) {
+        console.error('Error handling promote event', e);
+      }
     });
 
     socket.on("drawRequest", async (data: any) => {
@@ -327,13 +353,42 @@ function initializeChessGame(): void {
 
 function drawGame(selectPiece: Piece | null = null): void {
   if (canvasManager && canvasManager.isImagesLoaded()) {
-    console.log("Drawing game board");
-    console.log("Current board state:", gameManager.getBoard());
-    canvasManager.drawBoard(gameManager.getBoard(), selectPiece, gameManager.getPlayerColor());
+  const gs: any = gameManager.getGameStateRaw() ?? null;
+    let lastFrom = gs?.lastMoveFrom ? { x: gs.lastMoveFrom.x, y: gs.lastMoveFrom.y } : null;
+    let lastTo = gs?.lastMoveTo ? { x: gs.lastMoveTo.x, y: gs.lastMoveTo.y } : null;
+
+    // Determine if player's king (or opponent's) is in check to highlight that square
+    let inCheckSquare: { x: number; y: number } | null = null;
+    if (gs) {
+      const board = gameManager.getBoard();
+      const whiteInCheck = gs.whiteInCheck;
+      const blackInCheck = gs.blackInCheck;
+      if (whiteInCheck) {
+        const kingPos = findKingPosition('white', board);
+        if (kingPos) inCheckSquare = { x: kingPos.x, y: kingPos.y };
+      }
+      if (blackInCheck) {
+        const kingPos = findKingPosition('black', board);
+        if (kingPos) inCheckSquare = { x: kingPos.x, y: kingPos.y };
+      }
+    }
+
+    canvasManager.drawBoard(gameManager.getBoard(), selectPiece, gameManager.getPlayerColor(), lastFrom, lastTo, inCheckSquare);
   } else {
-    // Retry drawing after a short delay if images aren't loaded yet
     setTimeout(() => drawGame(selectPiece), 100);
   }
+}
+
+function findKingPosition(color: string, board: Board): BoardCords | null {
+  for (let x = 0; x < 8; x++) {
+    for (let y = 0; y < 8; y++) {
+      const piece = board.getPieceAt(x, y);
+      if (piece && piece.getColor() === color && piece.getType() === PieceType.KING) {
+        return new BoardCords(x, y);
+      }
+    }
+  }
+  return null;
 }
 
 function updateTurnIndicator(): void {

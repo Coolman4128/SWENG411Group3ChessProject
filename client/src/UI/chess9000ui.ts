@@ -29,6 +29,51 @@ export class Chess9000UI {
   private constructor() {
     this.initializeDialogContainer();
   }
+
+  /**
+   * Show a dedicated promotion selection dialog returning chosen piece type string.
+   */
+  public async promotionDialog(color: 'white'|'black'): Promise<'queen'|'rook'|'bishop'|'knight'> {
+    return new Promise(resolve => {
+      this.initializeDialogContainer();
+      const dialog = document.createElement('div');
+      dialog.className = 'pulldown-dialog';
+      const backdrop = document.createElement('div');
+      backdrop.className = 'dialog-backdrop';
+      const content = document.createElement('div');
+      content.className = 'dialog-content';
+      const messageElement = document.createElement('div');
+      messageElement.className = 'dialog-message';
+      messageElement.textContent = 'Promote pawn to:';
+      const buttons = document.createElement('div');
+      buttons.className = 'dialog-buttons promotion-buttons';
+      const options: Array<{key:string; label:string}> = [
+        { key: 'queen', label: 'Queen' },
+        { key: 'rook', label: 'Rook' },
+        { key: 'bishop', label: 'Bishop' },
+        { key: 'knight', label: 'Knight' }
+      ];
+      const finish = (choice: 'queen'|'rook'|'bishop'|'knight') => {
+        this.hideDialog(dialog, () => resolve(choice));
+      };
+      options.forEach(opt => {
+        const btn = document.createElement('button');
+        btn.className = 'dialog-button good';
+        btn.textContent = opt.label;
+        btn.addEventListener('click', () => finish(opt.key as any));
+        buttons.appendChild(btn);
+      });
+      backdrop.addEventListener('click', () => finish('queen')); // default queen
+      content.appendChild(messageElement);
+      content.appendChild(buttons);
+      dialog.appendChild(backdrop);
+      dialog.appendChild(content);
+      if (this.dialogContainer) {
+        this.dialogContainer.appendChild(dialog);
+        this.showDialog(dialog);
+      }
+    });
+  }
   
   public static getInstance(): Chess9000UI {
     if (!Chess9000UI.instance) {

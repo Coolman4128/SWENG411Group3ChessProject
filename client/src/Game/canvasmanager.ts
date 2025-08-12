@@ -81,7 +81,7 @@ export class CanvasManager {
         console.log('All images loaded successfully');
     }
 
-    public drawBoard(board: Board, selectPiece: Piece | null, playerColor: string | null = null): void {
+    public drawBoard(board: Board, selectPiece: Piece | null, playerColor: string | null = null, lastMoveFrom: {x:number;y:number}|null = null, lastMoveTo: {x:number;y:number}|null = null, inCheckSquare: {x:number;y:number}|null = null): void {
         if (!this.imagesLoaded) {
             console.warn('Images not loaded yet, retrying in 100ms...');
             setTimeout(() => this.drawBoard(board, selectPiece, playerColor), 100);
@@ -101,6 +101,17 @@ export class CanvasManager {
 
         // Draw the board background
         this.ctx.drawImage(this.boardImage, 0, 0, this.canvas.width, this.canvas.height);
+
+        // Highlight last move squares (destination first so origin overlay remains visible)
+        if (lastMoveFrom && lastMoveTo) {
+            this.highlightSquare(lastMoveFrom.x, lastMoveFrom.y, 'rgba(255,215,0,0.35)'); // gold origin
+            this.highlightSquare(lastMoveTo.x, lastMoveTo.y, 'rgba(50,205,50,0.45)'); // green destination
+        }
+
+        // Highlight king in check
+        if (inCheckSquare) {
+            this.highlightSquare(inCheckSquare.x, inCheckSquare.y, 'rgba(255,0,0,0.5)');
+        }
 
         // Draw valid move indicators if a piece is selected
         if (selectPiece) {
