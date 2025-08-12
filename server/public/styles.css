@@ -407,6 +407,8 @@ body {
   display: flex;
   flex-direction: column;
   border: 1px solid #3b82f6;
+  /* Prevent internal sections from forcing the panel to grow; let inner scroll areas handle overflow */
+  overflow: hidden;
 }
 
 /* Turn Indicator */
@@ -445,6 +447,8 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
+  /* Allow child flex item (moves-list) to shrink and scroll instead of growing container */
+  min-height: 0;
 }
 
 .move-history h3 {
@@ -456,12 +460,16 @@ body {
 
 .moves-list {
   flex: 1;
-  overflow-y: auto;
   border: 1px solid #60a5fa;
   border-radius: 4px;
   padding: 1rem;
   background: #f8fafc;
+  /* Allow scrolling when content exceeds available height */
+  overflow-y: auto;
+  /* Preserve original visual starting size while capping growth at available space */
   min-height: 200px;
+  /* Ensure the list never forces parent to expand; it can shrink below intrinsic content */
+  min-height: 0;
 }
 
 .move-item {
