@@ -518,9 +518,19 @@ io.on("connection", (socket) => {
       // Remove player from waiting list if they were there
       playersWaitingForRematch.delete(socket.id);
       
-      // Remove player from game if they're in it
+      // If player is in an active game, handle winner logic for opponent
       if (gameManager.isPlayerInGame(socket.id)) {
-        gameManager.removePlayer(socket.id);
+        const gameStarted = gameManager.isGameStarted();
+        const opponentId = gameManager.getOpponentId(socket.id); // capture before removal
+        const playerColor = gameManager.removePlayer(socket.id);
+        if (gameStarted && opponentId) {
+          console.log(`Player ${socket.id} (${playerColor}) left during active game via leaveGame`);
+          stopGameTimer();
+          emitPlayerLeft(opponentId, socket.id, playerColor);
+        } else {
+          // Just update lobby state if game not started
+          io.emit("gameState", gameManager.packageGameStateJSON());
+        }
       }
       
       // Disconnect the socket and send them to main menu
@@ -544,17 +554,17 @@ io.on("connection", (socket) => {
       // Check if the disconnecting player is in the game
       if (gameManager.isPlayerInGame(socket.id)) {
         const gameStarted = gameManager.isGameStarted();
+        // IMPORTANT: capture opponent BEFORE removing the player so we retain the winner id
+        const opponentId = gameManager.getOpponentId(socket.id);
         const playerColor = gameManager.removePlayer(socket.id);
-        
+
         if (!gameStarted) {
           // Game hasn't started yet - just remove player and update game state
           console.log(`Player ${socket.id} (${playerColor}) left before game started`);
           io.emit("gameState", gameManager.packageGameStateJSON());
         } else {
           // Game has started - end the game due to player leaving
-          const opponentId = gameManager.getOpponentId(socket.id);
           console.log(`Player ${socket.id} (${playerColor}) left during active game`);
-          
           stopGameTimer();
           emitPlayerLeft(opponentId, socket.id, playerColor);
         }
