@@ -4735,11 +4735,71 @@
     return `${color}-${piece}.png`;
   }
 
+  // src/UI/soundmanager.ts
+  var SoundManager = class _SoundManager {
+    constructor() {
+      this.muted = false;
+      this.STORAGE_KEY = "chess9000_mute";
+      this.moveAudio = new Audio("piecemoved.mp3");
+      this.endAudio = new Audio("gameending.mp3");
+      this.moveAudio.preload = "auto";
+      this.endAudio.preload = "auto";
+      this.restoreMuteSetting();
+    }
+    static getInstance() {
+      if (!_SoundManager.instance) {
+        _SoundManager.instance = new _SoundManager();
+      }
+      return _SoundManager.instance;
+    }
+    restoreMuteSetting() {
+      try {
+        const stored = localStorage.getItem(this.STORAGE_KEY);
+        if (stored !== null) {
+          this.muted = stored === "true";
+        }
+      } catch (e) {
+      }
+    }
+    persistMuteSetting() {
+      try {
+        localStorage.setItem(this.STORAGE_KEY, this.muted ? "true" : "false");
+      } catch (e) {
+      }
+    }
+    setMuted(m) {
+      this.muted = m;
+      this.persistMuteSetting();
+    }
+    toggleMuted() {
+      this.setMuted(!this.muted);
+      return this.muted;
+    }
+    isMuted() {
+      return this.muted;
+    }
+    safePlay(audio) {
+      if (this.muted) return;
+      try {
+        audio.currentTime = 0;
+        void audio.play();
+      } catch (e) {
+      }
+    }
+    playMove() {
+      this.safePlay(this.moveAudio);
+    }
+    playGameEnd() {
+      this.safePlay(this.endAudio);
+    }
+  };
+
   // src/main.ts
   var socket = null;
   var canvasManager;
   var gameManager;
   var ui;
+  var sound = SoundManager.getInstance();
   window.testDialog = async () => {
     const result = await ui.pulldownDialog(
       "This is a test dialog. Choose your response!",
@@ -4750,6 +4810,7 @@
   };
   document.addEventListener("DOMContentLoaded", () => {
     ui = Chess9000UI.getInstance();
+    setupSettingsMenu();
     setupLaunchScreen();
     initializeChessGame();
   });
@@ -4829,19 +4890,30 @@
       });
       socket.on("gameEnded", async (data) => {
         console.log("Game ended:", data);
+        sound.playGameEnd();
         let message = "";
+        const winnerId = data.winnerId || data.winner;
+        const winnerColor = data.winnerColor;
+        const playerSocketId = socket.id;
+        const playerColor = gameManager.getPlayerColor();
+        let didPlayerWin = false;
+        if (winnerColor && playerColor) {
+          didPlayerWin = winnerColor === playerColor;
+        } else if (winnerId) {
+          didPlayerWin = winnerId === playerSocketId;
+        }
         if (data.reason === "draw") {
           message = "Game ended in a draw!";
         } else if (data.reason === "concede") {
-          message = `Game ended - ${data.winner === socket.id ? "You won" : "You lost"} by concession!`;
+          message = `Game ended - ${didPlayerWin ? "You won" : "You lost"} by concession!`;
         } else if (data.reason === "checkmate") {
-          message = `Game ended - ${data.winner === socket.id ? "You won" : "You lost"} by checkmate!`;
+          message = `Game ended - ${didPlayerWin ? "You won" : "You lost"} by checkmate!`;
         } else if (data.reason === "stalemate") {
           message = "Game ended in a stalemate!";
         } else if (data.reason === "timeout") {
-          message = `Game ended - ${data.winner === gameManager.getPlayerColor() ? "You won" : "You lost"} by timeout!`;
+          message = `Game ended - ${didPlayerWin ? "You won" : "You lost"} by timeout!`;
         } else if (data.reason === "playerLeft") {
-          message = `Game ended - ${data.winner === socket.id ? "You won" : "You lost"} because the opponent left!`;
+          message = `Game ended - ${didPlayerWin ? "You won" : "You lost"} because the opponent left!`;
         }
         const playAgain = await ui.pulldownDialog(message, "Play Again", "Leave");
         if (playAgain) {
@@ -4875,6 +4947,7 @@
       socket.on("moveResult", (result) => {
         console.log("Move result:", result);
         if (result.success) {
+          sound.playMove();
           gameManager.clearSelection();
           drawGame();
         }
@@ -5141,5 +5214,26 @@
       socket = null;
       console.log("Returned to main menu");
     }
+  }
+  function setupSettingsMenu() {
+    const gear = document.querySelector(".settings-icon");
+    const menu = document.getElementById("settingsDropdown");
+    const muteToggle = document.getElementById("muteSfxToggle");
+    if (!gear) return;
+    if (muteToggle) {
+      muteToggle.checked = sound.isMuted();
+      muteToggle.addEventListener("change", () => {
+        sound.setMuted(muteToggle.checked);
+      });
+    }
+    gear.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (menu) menu.classList.toggle("open");
+    });
+    document.addEventListener("click", (e) => {
+      if (menu && !menu.contains(e.target) && !e.target.classList.contains("settings-icon")) {
+        menu.classList.remove("open");
+      }
+    });
   }
 })();

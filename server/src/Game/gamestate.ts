@@ -10,6 +10,7 @@ export interface MoveResult {
     isDraw?: boolean;
     isCheck?: boolean;
     promotionRequired?: boolean; // Indicates the move requires a pawn promotion choice
+    winnerColor?: string; // Color string ("white"|"black") if decisive result
 }
 
 export class GameState {
@@ -197,7 +198,8 @@ export class GameState {
             if (lastIdx >= 0) {
                 this.turnList[lastIdx][0] = this.turnList[lastIdx][0].replace(/\+?$/, "#");
             }
-            console.log(`Checkmate! ${opponentColor === "white" ? "White" : "Black"} wins!`);
+            const winnerColor = opponentColor === "white" ? "black" : "white"; // previous player before turn flip
+            console.log(`Checkmate! ${winnerColor === "white" ? "White" : "Black"} wins!`);
             // Emit updated state before returning
             if (eventEmitter) {
                 eventEmitter("gameState", this.toJSON());
@@ -205,7 +207,8 @@ export class GameState {
             return {
                 success: true,
                 isCheckmate: true,
-                message: `Checkmate! ${opponentColor === "white" ? "White" : "Black"} wins!`
+                winnerColor,
+                message: `Checkmate! ${winnerColor === "white" ? "White" : "Black"} wins!`
             };
         }
 
@@ -307,11 +310,12 @@ export class GameState {
             if (lastIdx >= 0) {
                 this.turnList[lastIdx][0] = this.turnList[lastIdx][0].replace(/\+?$/, "#");
             }
+            const winnerColor = opponentColor === "white" ? "black" : "white"; // previous mover wins
             if (eventEmitter) {
                 eventEmitter("gameState", this.toJSON());
             }
             this.pendingPromotion = null; // clear
-            return { success: true, isCheckmate: true, message: `Checkmate! ${opponentColor === "white" ? "White" : "Black"} wins!` };
+            return { success: true, isCheckmate: true, winnerColor, message: `Checkmate! ${winnerColor === "white" ? "White" : "Black"} wins!` };
         }
 
         const isDraw = this.isStalemate(this.currentTurn);

@@ -64,6 +64,67 @@ let playersWaitingForRematch = new Set<string>();
 // Timer interval for checking timeouts and updating game state
 let gameTimer: NodeJS.Timeout | null = null;
 
+// Helper to look up winner socket id from a color string
+function getPlayerIdByColor(color: string | undefined): string | null {
+  if (!color) return null;
+  const gs = gameManager.getGameState();
+  if (color === "white") return gs.whitePlayer;
+  if (color === "black") return gs.blackPlayer;
+  return null;
+}
+
+// Unified emit helpers so "winner" is ALWAYS the socket id of the winner (never a color or message)
+function emitCheckmate(resultMessage: string, explicitWinnerColor?: string) {
+  // Prefer explicit winnerColor passed from MoveResult; fallback to parsing message
+  const parsedColor = /White wins!/i.test(resultMessage) ? "white" : /Black wins!/i.test(resultMessage) ? "black" : undefined;
+  const winnerColor = explicitWinnerColor || parsedColor;
+  const winnerId = getPlayerIdByColor(winnerColor || "");
+  io.emit("gameEnded", {
+    reason: "checkmate",
+    winner: winnerId,
+    winnerId,
+    winnerColor,
+    message: resultMessage
+  });
+}
+
+function emitTimeout(winnerColor: string) {
+  const winnerId = getPlayerIdByColor(winnerColor);
+  io.emit("gameEnded", {
+    reason: "timeout",
+    winner: winnerId,
+    winnerId,
+    winnerColor,
+    message: `${winnerColor} wins by timeout!`
+  });
+}
+
+function emitConcede(winnerId: string | null, loserId: string) {
+  const gs = gameManager.getGameState();
+  const winnerColor = winnerId === gs.whitePlayer ? "white" : winnerId === gs.blackPlayer ? "black" : undefined;
+  io.emit("gameEnded", {
+    reason: "concede",
+    winner: winnerId,
+    winnerId,
+    winnerColor,
+    loser: loserId,
+    message: winnerId ? `${winnerColor} wins by concession` : `Game ended by concession`
+  });
+}
+
+function emitPlayerLeft(winnerId: string | null, loserId: string, loserColor: string | null) {
+  const gs = gameManager.getGameState();
+  const winnerColor = winnerId === gs.whitePlayer ? "white" : winnerId === gs.blackPlayer ? "black" : undefined;
+  io.emit("gameEnded", {
+    reason: "playerLeft",
+    winner: winnerId,
+    winnerId,
+    winnerColor,
+    loser: loserId,
+    message: `${loserColor ?? "A"} player left the game`
+  });
+}
+
 function startGameTimer() {
   if (gameTimer) {
     clearInterval(gameTimer);
@@ -74,12 +135,10 @@ function startGameTimer() {
     const timeoutResult = gameManager.checkForTimeout();
     if (timeoutResult.isTimeOut) {
       // End the game due to timeout
-      io.emit("gameEnded", { 
-        reason: "timeout", 
-        winner: timeoutResult.winner,
-        message: `${timeoutResult.winner} wins by timeout!`
-      });
-      console.log(`Game ended - ${timeoutResult.winner} won by timeout`);
+      if (timeoutResult.winner) {
+        emitTimeout(timeoutResult.winner);
+        console.log(`Game ended - ${timeoutResult.winner} won by timeout`);
+      }
       clearInterval(gameTimer!);
       gameTimer = null;
       return;
@@ -159,7 +218,7 @@ io.on("connection", (socket) => {
         if (result.isCheckmate) {
           console.log("Game ended in checkmate!");
           stopGameTimer();
-          io.emit("gameEnded", { reason: "checkmate", winner: result.message });
+          emitCheckmate(result.message || "Checkmate!", result.winnerColor);
         } else if (result.isDraw) {
           console.log("Game ended in draw!");
           stopGameTimer();
@@ -256,7 +315,7 @@ io.on("connection", (socket) => {
         if (result.isCheckmate) {
           console.log("Game ended in checkmate!");
           stopGameTimer();
-          io.emit("gameEnded", { reason: "checkmate", winner: result.message });
+          emitCheckmate(result.message || "Checkmate!", result.winnerColor);
         } else if (result.isDraw) {
           console.log("Game ended in draw!");
           stopGameTimer();
@@ -301,7 +360,7 @@ io.on("connection", (socket) => {
       socket.emit("moveResult", result);
       if (result.isCheckmate) {
         stopGameTimer();
-        io.emit("gameEnded", { reason: "checkmate", winner: result.message });
+  emitCheckmate(result.message || "Checkmate!", result.winnerColor);
       } else if (result.isDraw) {
         stopGameTimer();
         io.emit("gameEnded", { reason: "stalemate" });
@@ -366,13 +425,8 @@ io.on("connection", (socket) => {
       
       // Stop the timer and end the game
       stopGameTimer();
-      io.emit("gameEnded", { 
-        reason: "concede", 
-        winner: opponentId,
-        loser: socket.id
-      });
-      
-      console.log(`Game ended - ${opponentId} won by concession`);
+  emitConcede(opponentId, socket.id);
+  console.log(`Game ended - ${opponentId ?? "Unknown"} won by concession`);
     } catch (error) {
       console.error("Error handling concede:", error);
     }
@@ -502,12 +556,7 @@ io.on("connection", (socket) => {
           console.log(`Player ${socket.id} (${playerColor}) left during active game`);
           
           stopGameTimer();
-          io.emit("gameEnded", { 
-            reason: "playerLeft", 
-            winner: opponentId,
-            loser: socket.id,
-            message: `${playerColor} player left the game`
-          });
+          emitPlayerLeft(opponentId, socket.id, playerColor);
         }
       }
     } catch (error) {

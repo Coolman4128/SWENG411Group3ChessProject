@@ -5,6 +5,7 @@ import { Piece, BoardCords } from "./Game/piece";
 import { PieceType } from "./Enums/pieces";
 import { GameManager } from "./Game/gamemanager";
 import { Chess9000UI, getPieceImageUrl } from "./UI/chess9000ui";
+import { SoundManager } from "./UI/soundmanager"; // added
 
 // Socket will be initialized when user clicks launch button
 let socket: any = null;
@@ -13,6 +14,7 @@ let canvasManager: CanvasManager;
 let gameManager: GameManager;
 let board: Board;
 let ui: Chess9000UI;
+const sound = SoundManager.getInstance(); // added
 
 // Test function for the pulldown dialog - can be called from browser console
 (window as any).testDialog = async () => {
@@ -27,6 +29,7 @@ let ui: Chess9000UI;
 document.addEventListener("DOMContentLoaded", () => {
   // Initialize the UI
   ui = Chess9000UI.getInstance();
+  setupSettingsMenu(); // added
   
   // Set up launch button functionality
   setupLaunchScreen();
@@ -144,23 +147,33 @@ function initializeSocketConnection(): void {
 
     socket.on("gameEnded", async (data: any) => {
       console.log("Game ended:", data);
+      sound.playGameEnd(); // play end sound
       let message = "";
+      // Normalize winnerId (server now always sends winner as socket id) and winnerColor if available
+      const winnerId = data.winnerId || data.winner; // socket id of winner
+      const winnerColor = data.winnerColor; // optional color string
+      const playerSocketId = socket.id;
+      const playerColor = gameManager.getPlayerColor();
+      let didPlayerWin = false;
+      if (winnerColor && playerColor) {
+        didPlayerWin = winnerColor === playerColor;
+      } else if (winnerId) {
+        didPlayerWin = winnerId === playerSocketId;
+      }
       if (data.reason === "draw") {
         message = "Game ended in a draw!";
       } else if (data.reason === "concede") {
-        message = `Game ended - ${data.winner === socket.id ? "You won" : "You lost"} by concession!`;
+        message = `Game ended - ${didPlayerWin ? "You won" : "You lost"} by concession!`;
       } else if (data.reason === "checkmate") {
-        message = `Game ended - ${data.winner === socket.id ? "You won" : "You lost"} by checkmate!`;
+        message = `Game ended - ${didPlayerWin ? "You won" : "You lost"} by checkmate!`;
       } else if (data.reason === "stalemate") {
         message = "Game ended in a stalemate!";
       } else if (data.reason === "timeout") {
-        message = `Game ended - ${data.winner === gameManager.getPlayerColor() ? "You won" : "You lost"} by timeout!`;
+        message = `Game ended - ${didPlayerWin ? "You won" : "You lost"} by timeout!`;
       } else if (data.reason === "playerLeft") {
-        message = `Game ended - ${data.winner === socket.id ? "You won" : "You lost"} because the opponent left!`;
+        message = `Game ended - ${didPlayerWin ? "You won" : "You lost"} because the opponent left!`;
       }
-      
       const playAgain = await ui.pulldownDialog(message, "Play Again", "Leave");
-      
       if (playAgain) {
         // Player wants to play again
         console.log("Player chose to play again");
@@ -205,6 +218,7 @@ function initializeSocketConnection(): void {
       console.log("Move result:", result);
       // If the move was successful, clear the selected piece
       if (result.success) {
+        sound.playMove(); // play move sound
         gameManager.clearSelection();
         // Redraw the game to show the cleared selection
         drawGame();
@@ -574,4 +588,26 @@ function returnToMainMenu(): void {
     
     console.log("Returned to main menu");
   }
+}
+
+function setupSettingsMenu() {
+  const gear = document.querySelector('.settings-icon');
+  const menu = document.getElementById('settingsDropdown');
+  const muteToggle = document.getElementById('muteSfxToggle') as HTMLInputElement | null;
+  if (!gear) return;
+  if (muteToggle) {
+    muteToggle.checked = sound.isMuted();
+    muteToggle.addEventListener('change', () => {
+      sound.setMuted(muteToggle.checked);
+    });
+  }
+  gear.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (menu) menu.classList.toggle('open');
+  });
+  document.addEventListener('click', (e) => {
+    if (menu && !menu.contains(e.target as Node) && !(e.target as HTMLElement).classList.contains('settings-icon')) {
+      menu.classList.remove('open');
+    }
+  });
 }
